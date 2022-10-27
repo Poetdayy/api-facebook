@@ -48,7 +48,7 @@ let signUp = async (req, res) => {
     const isTruePhoneNumber = isIdentifiedPhoneNumber(phoneNumber, password);
     const isTruePassword = isIdentifiedPassword(password);
 
-    if (isisTruePhoneNumber && isTruePassword && !isTrueUsedAccount) {
+    if (isTruePhoneNumber && isTruePassword && !isTrueUsedAccount) {
 
         AccountModel.create({
             phoneNumber: phoneNumber,
