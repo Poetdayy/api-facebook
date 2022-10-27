@@ -60,10 +60,10 @@ let signUp = async (req, res) => {
                 console.log('usedPhoneNumber err', err);
             });
     }
-    else if(!isTruePassword) {
+    else if(!isTruePhoneNumber) {
         res.json('Incorrect formatting of phonenumber');
     }
-    else if(!isTrueUsedAccount) {
+    else if(!isTruePassword) {
         res.json('Incorrect formattion of password');
     }
     else if(isTrueUsedAccount) {
