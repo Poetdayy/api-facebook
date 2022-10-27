@@ -15,29 +15,28 @@ import AccountModel from "../models/accounts";
 
 
 const isIdentifiedPhoneNumber = (phoneNumber, password) => {
-    (phoneNumber !== password) && (phoneNumber.charAt(0) === '0') && (phoneNumber.length === 10);
+    return (phoneNumber !== password) && (phoneNumber.charAt(0) === '0') && (phoneNumber.length === 10) ? true : false;
 }
 
 const isIdentifiedPassword = (password) => {
-    password.length > 5 && password.length < 11;
+    return password.length > 5 && password.length < 11 ? true : false;
 }
 
 const isUsedAccount = async (phoneNumber) => {
-
+    let usedAccount = false;
     await AccountModel.findOne({
         phoneNumber: phoneNumber,
     })
         .then((data) => {
-            console.log(data);
             if (data) {
-                return false;
+                usedAccount = true;
             }
         })
         .catch(err => {
             console.log('usedPhoneNumber err', err);
         })
 
-    return true;
+    return usedAccount;
 }
 
 // list authAPI
@@ -45,10 +44,11 @@ const isUsedAccount = async (phoneNumber) => {
 let signUp = async (req, res) => {
     const { phoneNumber, password, uuid } = req.body;
 
-    const isUsedAccount = await isUsedAccount(phoneNumber);
-    const isIdentifiedPhoneNumber = isIdentifiedPhoneNumber(phoneNumber, password);
+    const isTrueUsedAccount = await isUsedAccount(phoneNumber);
+    const isTruePhoneNumber = isIdentifiedPhoneNumber(phoneNumber, password);
+    const isTruePassword = isIdentifiedPassword(password);
 
-    if (isIdentifiedPhoneNumber && !isUsedAccount) {
+    if (isTruePhoneNumber && isTruePassword && !isTrueUsedAccount) {
 
         AccountModel.create({
             phoneNumber: phoneNumber,
@@ -60,10 +60,13 @@ let signUp = async (req, res) => {
                 console.log('usedPhoneNumber err', err);
             });
     }
-    else if(!isIdentifiedPhoneNumber) {
+    else if(!isTruePassword) {
         res.json('Incorrect formatting of phonenumber');
     }
-    else if(isUsedAccount) {
+    else if(!isTrueUsedAccount) {
+        res.json('Incorrect formattion of password');
+    }
+    else if(isTrueUsedAccount) {
         res.json('User existed');
     }
 
