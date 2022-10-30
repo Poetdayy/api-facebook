@@ -55,12 +55,12 @@ function encodePassword(password) {
  * @param {string} password
  * @returns {Object}
  */
-const isAccountMatch = async (phoneNumber, password) => {
+const isAccountMatch = async (phoneNumber, password, uuid) => {
   let foundAccount = {};
   await AccountModel.findOne({
     phoneNumber: phoneNumber,
   })
-    .then((account) => {
+    .then(async (account) => {
       if (account) {
         var crypto = require("crypto");
         let passwordField = account.password.split("$");
@@ -70,6 +70,10 @@ const isAccountMatch = async (phoneNumber, password) => {
           .update(password)
           .digest("base64");
         if (hash === passwordField[1]) {
+          let accessToken = generateToken(uuid).accessToken;
+          let refreshToken = generateToken(uuid).refreshToken;
+          account.token = accessToken;
+          await account.save();
           foundAccount = account;
         }
       }
@@ -98,12 +102,12 @@ function generateToken(uuid) {
       .update(refreshId)
       .digest("base64");
     let accessToken = jwt.sign(uuid, process.env.jwtSecret);
-    let b = new Buffer.alloc(11, hash, 'base64');
+    let b = new Buffer.alloc(11, hash, "base64");
     let refreshToken = b.toString("base64");
     token = {
       accessToken: accessToken,
-      refreshToken: refreshToken,     
-    }
+      refreshToken: refreshToken,
+    };
     return token;
   } catch (err) {
     return { errors: err };
@@ -119,24 +123,46 @@ let signUp = async (req, res) => {
   const isTruePhoneNumber = isIdentifiedPhoneNumber(phoneNumber, password);
   const isTruePassword = isIdentifiedPassword(password);
 
+  if (!phoneNumber || !password || !uuid) {
+    return res.json({
+      code: 1002,
+      message: "Parameter is not enough",
+    });
+  }
+
   if (isTruePhoneNumber && isTruePassword && !isTrueUsedAccount) {
     AccountModel.create({
       phoneNumber: phoneNumber,
       password: encodePassword(password),
       uuid: uuid,
+      avatar: "",
+      username: "",
+      token: "",
     })
       .then((data) => {
-        res.json("OK");
+        return res.json({
+          code: 1000,
+          message: "OK",
+        });
       })
       .catch((err) => {
         console.log("usedPhoneNumber err", err);
       });
   } else if (!isTruePhoneNumber) {
-    res.json("Incorrect formatting of phonenumber");
+    return res.json({
+      code: 1004,
+      message: "Phone number is invalid",
+    });
   } else if (!isTruePassword) {
-    res.json("Incorrect formattion of password");
+    return res.json({
+      code: 1000,
+      message: "Password is invalid",
+    });
   } else if (isTrueUsedAccount) {
-    res.json("User existed");
+    return res.json({
+      code: 9996,
+      message: "User existed",
+    });
   }
 };
 
@@ -155,7 +181,7 @@ const login = async (req, res) => {
         code: 1002,
         message: "Parameter is not enough",
       });
-    };
+    }
 
     const passwordIsValid = isIdentifiedPassword(password);
 
@@ -166,7 +192,7 @@ const login = async (req, res) => {
         code: 1004,
         message: "Parameter value is invalid.",
       });
-    };
+    }
 
     const accountCheck = await isUsedAccount(phoneNumber);
 
@@ -175,13 +201,14 @@ const login = async (req, res) => {
         code: 9995,
         message: "User is not validated.",
       });
-    };
+    }
 
-    const account = await isAccountMatch(phoneNumber, password);
+    const account = await isAccountMatch(phoneNumber, password, uuid);
+    console.log(account);
     if (account) {
-      let accessToken = generateToken(uuid).accessToken;
-      let refreshToken = generateToken(uuid).refreshToken;
-      account.token = accessToken;
+      // let accessToken = generateToken(uuid).accessToken;
+      // let refreshToken = generateToken(uuid).refreshToken;
+      // account.token = accessToken;
       return res.json({
         code: 1000,
         message: "OK",
@@ -197,17 +224,37 @@ const login = async (req, res) => {
         code: 1004,
         message: "Invalid phone number or password",
       });
-    };
+    }
   } catch (err) {
     return res.json({
       code: 1005,
       message: "Unknown error",
       error: err.message,
     });
-  };
+  }
 };
+
+//TODO: write function for handling logout api
+// const logout = async (req, res) => {
+//   const accessToken = req.body.token;
+//   await AccountModel.findOne({
+//     token: "",
+//   }).then((data) => {
+//     if (data) {
+//       data.token = "";
+//       // res.redirect('/');
+//       return res.json({
+//         code: 1000,
+//         message: "OK",
+//       });
+//     } else {
+//       return res.json("Can't find");
+//     }
+//   });
+// };
 
 module.exports = {
   signUp,
   login,
+  logout,
 };
