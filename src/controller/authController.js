@@ -298,6 +298,12 @@ const login = async (req, res) => {
   }
 };
 
+/**
+ * @author hieubt
+ * @param {Object} req 
+ * @param {Object} res 
+ * @returns {JSON}
+ */
 const logout = async (req, res) => {
   const accessToken = req.body.token;
   if (!accessToken) {
