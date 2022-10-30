@@ -11,7 +11,7 @@ const AccountSchema = new Schema(
     username: String,
     phoneNumber: String,
     password: String,
-    token: String,
+    token: [{type: String}],
     avatar: String,
     id: String,
   },

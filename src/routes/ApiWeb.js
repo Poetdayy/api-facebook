@@ -12,8 +12,7 @@ let initWebRoutes = (app) => {
 
     router.post('/login', login);
 
-    //*Important: turn on when finish logout
-    // router.post('/logout', logout);
+    router.post('/logout', logout);
     
     return app.use('/', router);
 }

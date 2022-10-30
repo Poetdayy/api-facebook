@@ -17,6 +17,7 @@ const isIdentifiedPassword = (password) => {
 
 const isUsedAccount = async (phoneNumber) => {
   let usedAccount = false;
+  let isWrong = false;
   await AccountModel.findOne({
     phoneNumber: phoneNumber,
   })
@@ -26,7 +27,10 @@ const isUsedAccount = async (phoneNumber) => {
       }
     })
     .catch((err) => {
-      console.log("usedPhoneNumber err", err);
+      return {
+        isWrong: isWrong,
+        error: err,
+      }
     });
 
   return usedAccount;
@@ -56,7 +60,9 @@ function encodePassword(password) {
  * @returns {Object}
  */
 const isAccountMatch = async (phoneNumber, password, uuid) => {
-  let foundAccount = {};
+  let result = {};
+  let isWrong = false;
+  let isFound = false;
   await AccountModel.findOne({
     phoneNumber: phoneNumber,
   })
@@ -70,18 +76,55 @@ const isAccountMatch = async (phoneNumber, password, uuid) => {
           .update(password)
           .digest("base64");
         if (hash === passwordField[1]) {
-          let accessToken = generateToken(uuid).accessToken;
-          let refreshToken = generateToken(uuid).refreshToken;
-          account.token = accessToken;
+          let tokenList = generateToken(uuid);
+          if (tokenList.isWrong) {
+            isFound = false;
+            isWrong = true;
+          }
+          let accessToken = tokenList.accessToken;
+          let refreshToken = tokenList.refreshToken;
+          let tokenArr = [];
+          if (account.token[account.token.length - 1] != "") {
+            tokenArr = account.token;
+          }
+          if (!tokenArr.includes(accessToken)) {
+            tokenArr.push(accessToken);
+          }
+          account.token = tokenArr;
           await account.save();
-          foundAccount = account;
+          result = account;
+          isWrong = false;
+          isFound = true;
+        } else {
+          result = {
+            code: 1004,
+            message: "Invalid phone number or password",
+          };
+          isWrong = false;
+          isFound = false;
         }
+      } else {
+        result = {
+          code: 1004,
+          message: "Invalid phone number or password",
+        };
+        isWrong = false;
+        isFound = false;
       }
     })
     .catch((err) => {
-      console.log("Phone number err", err);
+      result = {
+        code: 1005,
+        message: "Unknown error",
+        error: err,
+      };
+      isWrong = true;
     });
-  return foundAccount;
+  return {
+    result: result,
+    isFound: isFound,
+    isWrong: isWrong,
+  };
 };
 
 /**
@@ -91,6 +134,7 @@ const isAccountMatch = async (phoneNumber, password, uuid) => {
  * @returns {Object[]}
  */
 function generateToken(uuid) {
+  let isWrong = false;
   let token = {};
   var jwt = require("jsonwebtoken");
   var crypto = require("crypto");
@@ -110,7 +154,10 @@ function generateToken(uuid) {
     };
     return token;
   } catch (err) {
-    return { errors: err };
+    return { 
+      errors: err,
+      isWrong: isWrong,
+    };
   }
 }
 
@@ -122,6 +169,14 @@ let signUp = async (req, res) => {
   const isTrueUsedAccount = await isUsedAccount(phoneNumber);
   const isTruePhoneNumber = isIdentifiedPhoneNumber(phoneNumber, password);
   const isTruePassword = isIdentifiedPassword(password);
+
+  if (isTrueUsedAccount.isWrong) {
+    return res.json({
+      code: 1005,
+      message: "Unknown message",
+      error: isTrueUsedAccount.error,
+    })
+  }
 
   if (!phoneNumber || !password || !uuid) {
     return res.json({
@@ -146,7 +201,11 @@ let signUp = async (req, res) => {
         });
       })
       .catch((err) => {
-        console.log("usedPhoneNumber err", err);
+        return res.json({
+          code: 1005,
+          message: "Unknown error",
+          error: err,
+        })
       });
   } else if (!isTruePhoneNumber) {
     return res.json({
@@ -196,6 +255,14 @@ const login = async (req, res) => {
 
     const accountCheck = await isUsedAccount(phoneNumber);
 
+    if (accountCheck.isWrong) {
+      return res.json({
+        code: 1005,
+        message: "Unknown error",
+        error: accountCheck.error,
+      })
+    }
+
     if (!accountCheck) {
       return res.json({
         code: 9995,
@@ -204,26 +271,23 @@ const login = async (req, res) => {
     }
 
     const account = await isAccountMatch(phoneNumber, password, uuid);
-    console.log(account);
-    if (account) {
-      // let accessToken = generateToken(uuid).accessToken;
-      // let refreshToken = generateToken(uuid).refreshToken;
-      // account.token = accessToken;
-      return res.json({
-        code: 1000,
-        message: "OK",
-        data: {
-          id: account.id ?? "",
-          username: account.username ?? "",
-          token: account.token ?? "",
-          avatar: account.avatar ?? "",
-        },
-      });
+    if (!account.isWrong) {
+      if (account.isFound) {
+        return res.json({
+          code: 1000,
+          message: "OK",
+          data: {
+            id: account.result.id ?? "",
+            username: account.result.username ?? "",
+            token: account.result.token ?? "",
+            avatar: account.result.avatar ?? "",
+          },
+        });
+      } else {
+        return res.json(account.result);
+      }
     } else {
-      return res.json({
-        code: 1004,
-        message: "Invalid phone number or password",
-      });
+      return res.json(result);
     }
   } catch (err) {
     return res.json({
@@ -234,24 +298,33 @@ const login = async (req, res) => {
   }
 };
 
-//TODO: write function for handling logout api
-// const logout = async (req, res) => {
-//   const accessToken = req.body.token;
-//   await AccountModel.findOne({
-//     token: "",
-//   }).then((data) => {
-//     if (data) {
-//       data.token = "";
-//       // res.redirect('/');
-//       return res.json({
-//         code: 1000,
-//         message: "OK",
-//       });
-//     } else {
-//       return res.json("Can't find");
-//     }
-//   });
-// };
+const logout = async (req, res) => {
+  const accessToken = req.body.token;
+  if (!accessToken) {
+    return res.json({
+      code: 1009,
+      message: "Not access",
+    });
+  }
+  await AccountModel.findOne({
+    token: accessToken,
+  }).then(async (data) => {
+    if (data) {
+      data.token = [];
+      await data.save();
+      // res.redirect("/");
+      return res.json({
+        code: 1000,
+        message: "OK",
+      });
+    } else {
+      return res.json({
+        code: 9998,
+        message: "Token is invalid",
+      });
+    }
+  });
+};
 
 module.exports = {
   signUp,
