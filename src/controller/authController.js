@@ -1,5 +1,6 @@
 import { use } from "moongose/routes";
 import AccountModel from "../models/accounts";
+import VerifyModel from "../models/verify";
 
 // Function for check condition - write for condition of auth
 
@@ -154,7 +155,7 @@ function generateToken(uuid) {
     };
     return token;
   } catch (err) {
-    return { 
+    return {
       errors: err,
       isWrong: isWrong,
     };
@@ -332,8 +333,82 @@ const logout = async (req, res) => {
   });
 };
 
+/**
+ * @author hieubt
+ * @param {Object} req 
+ * @param {Object} res 
+ * @returns {JSON}
+ */
+const get_verify_code = async (req, res) => {
+  var currentTime = new Date().getTime();
+  let userID;
+  let isGranted
+  const accountCheck = await isUsedAccount(req.body.phoneNumber);
+  if (accountCheck.isWrong) {
+    return res.json({
+      code: 1005,
+      message: "Unknown error",
+      error: accountCheck.error,
+    })
+  } else {
+    userID = accountCheck._id;
+    VerifyModel.findOne({
+      id: userID,
+    })
+      .then(async (data) => {
+        if (!data) {
+          VerifyModel.create({
+            id: userID,
+            startTime: currentTime,
+          });
+          isGranted = true;
+        } else {
+          if (currentTime - data.startTime >= 2000) {
+            data.startTime = currentTime;
+            await data.save();
+            isGranted = true;
+          } else {
+            isGranted = false;
+          }
+        }
+        if (isGranted) {
+          try {
+            let length = 6;
+            let verifyCode = Math.random().toString(36).substring(2, length);
+            return res.json({
+              code: 1000,
+              message: "1000",
+              data: {
+                verifyCode: verifyCode,
+              }
+            })
+          } catch (err) {
+            return res.json({
+              code: 1005,
+              message: "Unknown error",
+              error: err,
+            })
+          }
+        } else {
+          return res.json({
+            code: 1009,
+            message: "Not access",
+          })
+        }
+      })
+      .catch(err => {
+        return res.json({
+          code: 1005,
+          message: "Unknown error",
+          error: err,
+        })
+      })
+  }
+}
+
 module.exports = {
   signUp,
   login,
   logout,
+  get_verify_code,
 };

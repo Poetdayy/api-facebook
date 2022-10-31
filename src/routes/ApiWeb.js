@@ -1,5 +1,5 @@
 import express from "express";
-import { signUp, login, logout } from "../controller/authController";
+import { signUp, login, logout, get_verify_code } from "../controller/authController";
 
 let router = express.Router();
 
@@ -13,6 +13,8 @@ let initWebRoutes = (app) => {
     router.post('/login', login);
 
     router.post('/logout', logout);
+
+    router.post('/get_verify_code', get_verify_code);
     
     return app.use('/', router);
 }
