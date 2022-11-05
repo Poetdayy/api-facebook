@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 mongoose.connect("mongodb://localhost/api-facebook", {
@@ -20,6 +20,6 @@ const AccountSchema = new Schema(
   }
 );
 
-const AccountModel = mongoose.model("accounts", AccountSchema);
+const AccountModel = mongoose.model('accounts', AccountSchema);
 
 module.exports = AccountModel;

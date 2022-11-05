@@ -1,4 +1,3 @@
-import { use } from "moongose/routes";
 import AccountModel from "../models/accounts";
 import VerifyModel from "../models/verify";
 
