@@ -367,13 +367,13 @@ const get_verify_code = async (req, res) => {
   } else {
     let phoneNumber = req.body.phoneNumber;
     let account = await AccountModel.findOne({ phoneNumber });
-    let accountId = account._id;
+    let accountId = account._id.toString();
     await VerifyModel.findOne({
-      accountId,
+      _id: accountId,
     })
       .then(async (data) => {
         if (!data) {
-          VerifyModel.create({
+          await VerifyModel.create({
             _id: accountId,
             startTime: currentTime,
           });
