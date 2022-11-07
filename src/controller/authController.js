@@ -24,6 +24,8 @@ const isUsedAccount = async (phoneNumber) => {
     .then((data) => {
       if (data) {
         usedAccount = true;
+      } else {
+        usedAccount = false;
       }
     })
     .catch((err) => {
@@ -318,7 +320,16 @@ const logout = async (req, res) => {
     if (data) {
       data.token = [];
       await data.save();
-      // res.redirect("/");
+      const idToDelete = data._id.toString();
+      await VerifyModel.findOne({ idToDelete }).then(async res => {
+        await VerifyModel.deleteOne(res);
+      }).catch(err => {
+        res.json({
+          code: 1005,
+          message: 'Unknown error',
+          error: err,
+        })
+      });
       return res.json({
         code: 1000,
         message: "OK",
@@ -340,7 +351,6 @@ const logout = async (req, res) => {
  */
 const get_verify_code = async (req, res) => {
   var currentTime = new Date().getTime();
-  let userID;
   let isGranted
   const accountCheck = await isUsedAccount(req.body.phoneNumber);
   if (accountCheck.isWrong) {
@@ -349,15 +359,22 @@ const get_verify_code = async (req, res) => {
       message: "Unknown error",
       error: accountCheck.error,
     })
+  } else if (!accountCheck) {
+    return res.json({
+      code: 9995,
+      message: 'User is not validated',
+    })
   } else {
-    userID = accountCheck._id;
-    VerifyModel.findOne({
-      id: userID,
+    let phoneNumber = req.body.phoneNumber;
+    let account = await AccountModel.findOne({ phoneNumber });
+    let accountId = account._id;
+    await VerifyModel.findOne({
+      accountId,
     })
       .then(async (data) => {
         if (!data) {
           VerifyModel.create({
-            id: userID,
+            _id: accountId,
             startTime: currentTime,
           });
           isGranted = true;
@@ -372,7 +389,7 @@ const get_verify_code = async (req, res) => {
         }
         if (isGranted) {
           try {
-            let length = 6;
+            let length = 8;
             let verifyCode = Math.random().toString(36).substring(2, length);
             return res.json({
               code: 1000,
