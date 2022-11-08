@@ -163,6 +163,29 @@ function generateToken(uuid) {
   }
 }
 
+/**
+ * @author hieubt
+ * @description generate a sub string that have length characters from original string
+ * 
+ * @param {number} length 
+ * @param {string} string 
+ * @returns {string}
+ */
+function generateRandomSubString(length, string) {
+  let result = '';
+  const charactersLength = string.length;
+  let index = 0;
+  while (index < length) {
+    let checkDuplicateChar = string.charAt(Math.floor(Math.random() * charactersLength));
+    if (!result.includes(checkDuplicateChar)) {
+      result += checkDuplicateChar;
+      index++;
+    }
+  }
+
+  return result;
+}
+
 // list authAPI
 
 let signUp = async (req, res) => {
@@ -389,8 +412,14 @@ const get_verify_code = async (req, res) => {
         }
         if (isGranted) {
           try {
-            let length = 8;
-            let verifyCode = Math.random().toString(36).substring(2, length);
+            let numberString = '0123456789';
+            let characterString = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+            let randomNumberLength = 2;
+            let randomCharacterLength = 4;
+            let randomNumber = generateRandomSubString(randomNumberLength, numberString);
+            let randomCharacter = generateRandomSubString(randomCharacterLength, characterString);
+            let characterForCode = randomCharacter.concat(randomNumber).split('');
+            let verifyCode = characterForCode.map(value => ({ value, sort: Math.random() })).sort((a, b) => a.sort - b.sort).map(({ value }) => value).join('');
             return res.json({
               code: 1000,
               message: "1000",
