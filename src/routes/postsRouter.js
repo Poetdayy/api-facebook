@@ -1,26 +1,24 @@
 import express from "express";
-import multer from "multer";
-import path from "path";
-import { addPost, editPost, getPost, deletePost } from "../controller/postController";
+import { 
+    addPost, 
+    editPost, 
+    getPost, 
+    deletePost, 
+    reportPost, 
+    handleUploadFile,
+    setComment, 
+} from "../controller/postController";
 
-const storage = multer.diskStorage({
-    destination: './public/images',
-    filename: (req, file, cb) => {
-      return cb(null, `$(file.fieldname)_${Date.now()}${path.extname(file.originalname)}`);
-    }
-  })
-  
-  const upload = multer({
-    storage: storage,
-    limits: {
-      fileSize: 600000,
-    }
-  })
+// handle router
  
 let router = express.Router();
 
 let initPostsRoutes = (app) => {    
-    router.post('/', addPost);
+    router.post('/', handleUploadFile, addPost);
+
+    router.post('/:id', reportPost);
+
+    router.post('/:id/comment', setComment);
 
     router.get('/:id', getPost);
 
