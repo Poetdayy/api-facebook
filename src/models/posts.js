@@ -7,10 +7,10 @@ const PostSchema = new Schema(
     userId: String,
     url: String,
     token: String,
-    image: [String],
+    image: [{ type: String }],
     described: {
       type: String,
-      maxLength: 500,
+      maxLength: 100,
     },
     status: String,
     author: {
@@ -35,46 +35,3 @@ const PostSchema = new Schema(
 const PostsModel = mongoose.model("posts", PostSchema);
 
 module.exports = PostsModel;
-
-// image: {
-//     type: Array,
-//     id: {
-//         type: String,
-//     },
-//     url: {
-//         type: String,
-//     }
-// },
-// author: {
-//     type: Array,
-//     id: {
-//         type: String,
-//     },
-//     name: {
-//         type: String,
-//     },
-//     avatar: {
-//         type: String,
-//     },
-//     online: {
-//         type: Boolean,
-//     }
-// },
-// is_blocked: {
-//     type: Boolean,
-// },
-// can_edit: {
-//     type: Boolean,
-// },
-// banned: {
-//     type: Number,
-// },
-// can_comment: {
-//     type: Boolean,
-// },
-// url: {
-//     type: String,
-// },
-// messages: {
-//     type: Array,
-// },

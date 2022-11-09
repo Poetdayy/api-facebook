@@ -1,13 +1,17 @@
 import Post from "../models/posts";
 import AccountModel from "../models/accounts";
+import Comment from "../models/comments";
+import multer from "multer";
+import path from "path";
 
-const verifyAccessToken = async (token) => {
-  const haveAccessToken = false;
+const appRoot = require("app-root-path");
+
+const verifiedAccessToken = async (token) => {
+  let hasAccessToken = false;
 
   await AccountModel.findOne({ token }).then((data) => {
-    console.log(data);
     if (data) {
-      haveAccessToken = true;
+      hasAccessToken = true;
     }
   });
 
@@ -20,14 +24,10 @@ const addPost = async (req, res) => {
   const newPost = new Post(req.body);
 
   try {
-    const isVerifiedAccessToken = await verifyAccessToken(token);
+    const trueAccessToken = await verifiedAccessToken(token);
 
-    if (described !== "") {
+    if (described !== "" && described.length <= 100 && trueAccessToken) {
       const savedPost = await newPost.save();
-      const createdPost = {
-        id: savedPost._id,
-        url: savedPost.url,
-      };
 
       return res.status(200).json({
         code: 1000,
@@ -75,7 +75,18 @@ const editPost = async (req, res) => {
 
 const deletePost = async (req, res) => {
   try {
+    const { token } = req.body;
     const post = await Post.findById(req.params.id);
+    const trueAccessToken = await verifiedAccessToken(token);
+
+    if (post === null) {
+      res.status(403).json({
+        code: 9992,
+        message: "post is not existed",
+      });
+
+      return;
+    }
 
     console.log("f", post.banned);
     if (post.banned === 1 || post.banned === 2) {
@@ -167,45 +178,55 @@ const getPost = async (req, res) => {
 //     }
 // }
 
-const getLike = async (req, res) => {
-  const { token, id } = req.body;
-  const newLike = new Like(req.body);
-  const post = await Post.findById(req.params.id);
-  console.log(post);
-
+// Comments
+const setComment = async (req, res) => {
   try {
-    const isVerifiedAccessToken = await verifyAccessToken(token);
-    const bannedPost = post.banned === 1 || post.banned === 2;
+    const { token, id, comment, index, count } = req.body;
+    const post = await Post.findById(req.params.id);
+    const isTrueToken = await verifiedAccessToken(token);
 
-    if (id !== "") {
-      const savedLike = await newLike.save();
-      const createdLike = {
-        id: savedLike._id,
-        url: savedLike.url,
-      };
+    res.send("ok");
 
-      return res.status(200).json({
-        code: 1000,
-        message: "Like created successfully!",
-        data: {
-          likeNumber: Number,
+    if (isTrueToken && post) {
+      const infoUser = await getInfoUser(token).then((data) => data);
+      console.log(infoUser);
+
+      let newComment = new Comment({
+        token,
+        id,
+        comment,
+        index,
+        count,
+        poster: {
+          id: infoUser._id ?? "",
+          name: infoUser.name ?? "",
+          avatar: infoUser.avatar ?? "",
         },
       });
-    } else {
-      res.json({
-        message: "go back the login screen!",
-      });
+
+      const savedComment = await newComment.save();
+
+      // res.json({
+      //   code: 1000,
+      //   message: "set a comment successful!",
+      //   data {
+      //     id: savedComment._id,
+      //     comment: savedComment.comment,
+      //     created: savedComment.
+      //     poster: savedComment.poster,
+      //     is_blocked: savedComment.is_blocked,
+      //   }
+      // })
     }
   } catch (err) {
     res.status(500).json({
-      code: "9999",
-      message: err,
+      code: 1001,
+      message: "your internet is disconnected!",
     });
   }
 };
 
 module.exports = {
-  getLike,
   addPost,
   editPost,
   deletePost,
