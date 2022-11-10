@@ -8,11 +8,11 @@ mongoose.connect("mongodb://localhost/api-facebook", {
 
 const AccountSchema = new Schema(
   {
-    username: String,
     phoneNumber: String,
     password: String,
-    token: [{type: String}],
-    avatar: String,
+    token: String,
+    expirationAccessTokenDate: Date,
+    refreshToken: String,
     id: String,
   },
   {
