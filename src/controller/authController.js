@@ -1,5 +1,6 @@
 import AccountModel from "../models/accounts";
 import VerifyModel from "../models/verify";
+import UserModel from "../models/users";
 
 // Function for check condition - write for condition of auth
 
@@ -78,21 +79,19 @@ const isAccountMatch = async (phoneNumber, password, uuid) => {
           .update(password)
           .digest("base64");
         if (hash === passwordField[1]) {
-          let tokenList = generateToken(uuid);
+          let tokenList = generateToken(phoneNumber, password, uuid, account._id);
           if (tokenList.isWrong) {
             isFound = false;
             isWrong = true;
           }
           let accessToken = tokenList.accessToken;
           let refreshToken = tokenList.refreshToken;
-          let tokenArr = [];
-          if (account.token[account.token.length - 1] != "") {
-            tokenArr = account.token;
-          }
-          if (!tokenArr.includes(accessToken)) {
-            tokenArr.push(accessToken);
-          }
-          account.token = tokenArr;
+          const d = new Date();
+          d.setMinutes(d.getMinutes() + 60);
+          let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+          account.token = accessToken;
+          account.refreshToken = refreshToken;
+          account.expirationAccessTokenDate = date.toISOString();
           await account.save();
           result = account;
           isWrong = false;
@@ -133,13 +132,17 @@ const isAccountMatch = async (phoneNumber, password, uuid) => {
  * @author hieubt
  * @description generate user access token
  * @param {string} uuid
+ * @param {string} userId
+ * @param {string} phoneNumber
+ * @param {string} password
  * @returns {Object[]}
  */
-function generateToken(uuid) {
+function generateToken(phoneNumber, password, uuid, userId) {
   let isWrong = false;
   let token = {};
   var jwt = require("jsonwebtoken");
   var crypto = require("crypto");
+  // const keyToSign = uuid.toString() + userId.toString() + phoneNumber.toString() + password.toString();
   try {
     let refreshId = uuid + process.env.jwtSecret;
     let salt = crypto.randomBytes(16).toString("base64");
@@ -147,7 +150,7 @@ function generateToken(uuid) {
       .createHmac("sha512", salt)
       .update(refreshId)
       .digest("base64");
-    let accessToken = jwt.sign(uuid, process.env.jwtSecret);
+    let accessToken = jwt.sign({ id: userId, phoneNumber, password, uuid }, process.env.jwtSecret, { expiresIn: 3600 });
     let b = new Buffer.alloc(11, hash, "base64");
     let refreshToken = b.toString("base64");
     token = {
@@ -215,11 +218,32 @@ let signUp = async (req, res) => {
       phoneNumber: phoneNumber,
       password: encodePassword(password),
       uuid: uuid,
-      avatar: "",
-      username: "",
       token: "",
+      expirationAccessTokenDate: "",
+      refreshToken: "",
     })
-      .then((data) => {
+      .then(async (data) => {
+        const d = new Date();
+        let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+        UserModel.create({
+          id: data._id,
+          username: "",
+          phoneNumber: phoneNumber,
+          created: date.toISOString(),
+          avatar: "",
+          is_blocked: false,
+          online: true,
+        })
+          .then(async (user) => {
+            await user.save();
+          })
+          .catch(err => {
+            return res.json({
+              code: 1005,
+              message: "Unknown error",
+              error: err,
+            })
+          })
         return res.json({
           code: 1000,
           message: "OK",
@@ -302,10 +326,8 @@ const login = async (req, res) => {
           code: 1000,
           message: "OK",
           data: {
-            id: account.result.id ?? "",
-            username: account.result.username ?? "",
+            id: account.result._id ?? "",
             token: account.result.token ?? "",
-            avatar: account.result.avatar ?? "",
           },
         });
       } else {
@@ -341,7 +363,9 @@ const logout = async (req, res) => {
     token: accessToken,
   }).then(async (data) => {
     if (data) {
-      data.token = [];
+      data.token = '';
+      data.expirationAccessTokenDate = '';
+      data.refreshToken = '';
       await data.save();
       const idToDelete = data._id.toString();
       await VerifyModel.findOne({ idToDelete }).then(async res => {
@@ -374,7 +398,8 @@ const logout = async (req, res) => {
  */
 const get_verify_code = async (req, res) => {
   var currentTime = new Date().getTime();
-  let isGranted
+  let isGranted;
+  let verifyCode;
   const accountCheck = await isUsedAccount(req.body.phoneNumber);
   if (accountCheck.isWrong) {
     return res.json({
@@ -395,15 +420,33 @@ const get_verify_code = async (req, res) => {
       _id: accountId,
     })
       .then(async (data) => {
+        try {
+          let numberString = '0123456789';
+          let characterString = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+          let randomNumberLength = 2;
+          let randomCharacterLength = 4;
+          let randomNumber = generateRandomSubString(randomNumberLength, numberString);
+          let randomCharacter = generateRandomSubString(randomCharacterLength, characterString);
+          let characterForCode = randomCharacter.concat(randomNumber).split('');
+          verifyCode = characterForCode.map(value => ({ value, sort: Math.random() })).sort((a, b) => a.sort - b.sort).map(({ value }) => value).join('');
+        } catch (err) {
+          return res.json({
+            code: 1005,
+            message: "Unknown error",
+            error: err,
+          })
+        }
         if (!data) {
           await VerifyModel.create({
             _id: accountId,
             startTime: currentTime,
+            verifyCode: verifyCode,
           });
           isGranted = true;
         } else {
           if (currentTime - data.startTime >= 2000) {
             data.startTime = currentTime;
+            data.verifyCode = verifyCode;
             await data.save();
             isGranted = true;
           } else {
@@ -411,29 +454,13 @@ const get_verify_code = async (req, res) => {
           }
         }
         if (isGranted) {
-          try {
-            let numberString = '0123456789';
-            let characterString = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-            let randomNumberLength = 2;
-            let randomCharacterLength = 4;
-            let randomNumber = generateRandomSubString(randomNumberLength, numberString);
-            let randomCharacter = generateRandomSubString(randomCharacterLength, characterString);
-            let characterForCode = randomCharacter.concat(randomNumber).split('');
-            let verifyCode = characterForCode.map(value => ({ value, sort: Math.random() })).sort((a, b) => a.sort - b.sort).map(({ value }) => value).join('');
-            return res.json({
-              code: 1000,
-              message: "1000",
-              data: {
-                verifyCode: verifyCode,
-              }
-            })
-          } catch (err) {
-            return res.json({
-              code: 1005,
-              message: "Unknown error",
-              error: err,
-            })
-          }
+          return res.json({
+            code: 1000,
+            message: "OK",
+            data: {
+              verifyCode: verifyCode,
+            }
+          })
         } else {
           return res.json({
             code: 1009,
@@ -442,6 +469,7 @@ const get_verify_code = async (req, res) => {
         }
       })
       .catch(err => {
+        console.log(err)
         return res.json({
           code: 1005,
           message: "Unknown error",
@@ -449,6 +477,98 @@ const get_verify_code = async (req, res) => {
         })
       })
   }
+};
+
+/**
+ * @author hieubt
+ * @description check if verify code is valid
+ * 
+ * @param {Object} req 
+ * @param {Object} res 
+ * @returns 
+ */
+const check_verify_code = async (req, res) => {
+  const { phoneNumber, verifyCode } = req.body;
+
+  if (!phoneNumber || !verifyCode) {
+    return res.json({
+      code: 1002,
+      message: 'Parameter is not enough',
+    })
+  }
+
+  if (!isIdentifiedPhoneNumber(phoneNumber)) {
+    return res.json({
+      code: 1004,
+      message: 'Parameter value is invalid',
+    })
+  }
+
+  try {
+    await AccountModel.findOne({ phoneNumber })
+      .then(async account => {
+        if (!account) {
+          return res.json({
+            code: 9995,
+            message: 'User is not valid',
+          })
+        } else {
+          await VerifyModel.findOne({ verifyCode })
+            .then(async code => {
+              if (!code) {
+                return res.json({
+                  code: 1004,
+                  message: 'Parameter value is invalid',
+                })
+              } else {
+                if (!code.verified) {
+                  code.verified = true;
+                  await code.save();
+                  return res.json({
+                    code: 1000,
+                    message: 'OK',
+                    data: {
+                      token: account.token,
+                      id: account._id,
+                    }
+                  })
+                } else {
+                  return res.json({
+                    code: 9996,
+                    message: "User existed",
+                  })
+                }
+              }
+            })
+        }
+      })
+      .catch(err => {
+        return res.json({
+          code: 1005,
+          message: 'Unknown error',
+          error: err,
+        })
+      })
+  } catch (err) {
+    return res.json({
+      code: 1005,
+      message: 'Unknown error',
+      error: err,
+    })
+  }
+};
+
+//! haven't done yet
+const change_info_after_signup = async (req, res) => {
+  const { token, username, avatar } = req.body;
+  if (!token || !username || !avatar) {
+    return res.json({
+      code: 1002,
+      message: 'Parameter is not enough',
+    })
+  }
+
+
 }
 
 module.exports = {
@@ -456,4 +576,5 @@ module.exports = {
   login,
   logout,
   get_verify_code,
+  check_verify_code,
 };
