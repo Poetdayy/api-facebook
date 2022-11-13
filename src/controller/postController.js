@@ -1,19 +1,102 @@
 import Post from "../models/posts";
 import AccountModel from "../models/accounts";
+import Comment from "../models/comments";
+import multer from "multer";
+import path from "path";
 
-const verifyAccessToken = async (token) => {
+const appRoot = require('app-root-path');
+
+const verifiedAccessToken = async (token) => {
   
-  const haveAccessToken = false;
+  let hasAccessToken = false;
 
   await AccountModel.findOne({token})
-  .then((data) => { 
-    console.log(data);
+  .then((data) => {
     if(data) {
-      haveAccessToken = true;
+      hasAccessToken = true;
+      console.log(1, hasAccessToken); 
     }
   })
+  console.log(2, hasAccessToken);
 
-  return haveAccessToken;
+  return hasAccessToken;
+}
+
+const verifiedReportSubjects = (subject) => {
+
+  let trueReportSubject = false;
+  
+  const subjectOptions = ['Ảnh khoả thân', 'Bạo lực', 'Quấy rối', 'Tự tử/Gây thương tích', 'Tin giả', 'Bán hàng trái phép', 'Ngôn từ gây thù ghét', 'khủng bố'];
+
+  if(subjectOptions.find(item => item === subject))
+  {
+    trueReportSubject = true;
+  }
+
+  return trueReportSubject;
+}
+
+const getInfoUser = async (token) => {
+  try {
+    await AccountModel.findOne({token})
+    .then((data) => { 
+      if(data) {
+        return data;
+      }
+    })
+  } catch (err) {
+    console.log(err);
+  }
+}
+
+// handle upload file 
+const storage = multer.diskStorage({
+  destination: function(req, file, cb) {
+      cb(null, appRoot + '/src/public/images/');
+  },
+
+  filename: function(req, file, cb) {
+      cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+  }
+});
+
+const imageFilter = function(req, file, cb) {
+  // Accept images only
+  if (!file.originalname.match(/\.(jpg|JPG|jpeg|JPEG|png|PNG|gif|GIF)$/)) {
+      req.fileValidationError = 'Only image files are allowed!';
+      return cb(new Error('Only image files are allowed!'), false);
+  }
+  cb(null, true);
+}
+
+const handleUploadFile = async (req, res) => {
+  let upload = multer({
+    storage: storage,
+    fileFilter: imageFilter,
+    limits: {
+      fileSize: 1024 * 1024 * 5,
+    }
+  }).single('image')
+
+  upload(req, res, function(err) {
+    // req.file contains information of uploaded file
+    // req.body contains information of text fields, if there were any
+
+    if (req.fileValidationError) {
+        return res.send(req.fileValidationError);
+    }
+    else if (!req.file) {
+        return res.send('Please select an image to upload');
+    }
+    else if (err instanceof multer.MulterError) {
+        return res.send(err);
+    }
+    else if (err) {
+        return res.send(err);
+    }
+
+  });
+
 }
 
 // List API used for Post Status
@@ -21,27 +104,27 @@ const addPost = async (req, res) => {
   
     const { token, described } = req.body;
     const newPost = new Post(req.body);
-    
-    try {
-        const isVerifiedAccessToken = await verifyAccessToken(token);
-      
-        if (described !== "") {
-            const savedPost = await newPost.save();
-            const createdPost = {
-              id: savedPost._id,
-              url: savedPost.url
-            } 
 
-            return res.status(200).json({
-                code: 1000,
-                message: "Post created successfully!",
-                data: createdPost,
-            });
-       } else {
+    try {
+      const trueAccessToken = await verifiedAccessToken(token);
+      
+      if (described !== "" && described.length <= 100 && trueAccessToken) {
+        const savedPost = await newPost.save();
+
+        return res.status(200).json({
+          code: 1000,
+          message: "Post created successfully!",
+          data: {
+            id: savedPost._id,
+            url: savedPost.url ?? '',
+          },
+        });
+      } else {
         res.json({
           message: "go back the login screen!"
-        })
-       }
+        });
+      }
+
     } catch (err) {
         res.status(500).json({
           code: "9999",
@@ -82,29 +165,43 @@ const editPost = async (req, res) => {
 
 const deletePost = async (req, res) => {
     try {
+        const { token } = req.body;
         const post = await Post.findById(req.params.id);
+        const trueAccessToken = await verifiedAccessToken(token); 
 
-        console.log('f', post.banned);
+        if (post === null) {
+          res.status(403).json({
+            code: 9992,
+            message: "post is not existed"
+          })
+
+          return;
+        } 
+
         if(post.banned === 1 || post.banned === 2) {
           res.json({
             code: 9992,
             message: 'the post is banned!'
           })
-
         }
-
-        if (post.userId === req.body.userId) {
-            await post.deleteOne();
+        
+        if (trueAccessToken) {
+          await post.deleteOne();
             
-            res.status(200).json({
-              code: 1000,
-              message: "the post has been deleted"
-            });
+          res.status(200).json({
+            code: 1000,
+            message: "the post has been deleted"
+          });
+
+        } else if(!trueAccessToken) {
+          res.json({
+            message: "go back to login screen"
+          })
         } else {
-            res.status(403).json({
-              code: 9992,
-              message: "post is not existed"
-            });
+          res.status(403).json({
+            code: 9992,
+            message: "post is not existed"
+          });
         }  
     } catch (err) {
         res.status(500).json({
@@ -112,6 +209,55 @@ const deletePost = async (req, res) => {
           message: "your internet is disconnected!"
         });
     }
+}
+
+const reportPost = async (req, res) => {
+  try {
+    const { token, subject, details } = req.body;
+    const post = await Post.findById(req.params.id);
+    const isTrueToken = await verifiedAccessToken(token);
+    const isTrueReportSubject = verifiedReportSubjects(subject);
+
+    if (post === null) {
+      res.status(403).json({
+        code: 9992,
+        message: "post is not existed"
+      })
+    }
+
+    if(post.banned === 1 || post.banned === 2) {
+      
+      await deletePost();
+
+      res.json({
+        code: 1010,
+        message: 'the post is banned!'
+      })
+    }
+
+    if(isTrueToken && isTrueReportSubject && details) {
+      res.status(200).json({
+        code: 1000,
+        message: "report post successful!"
+      })
+    }
+    else if(!isTrueToken) {
+      res.json({
+        message: "go back to login screen"
+      })
+    }
+    else {
+      res.status(403).json({
+        code: 9992,
+        message: "post is not existed"
+      });
+    }
+  } catch (err) {
+    res.status(500).json({
+      code: 1001,
+      message: "your internet is disconnected!"
+    });
+  }
 }
 
 const getPost = async (req, res) => {
@@ -176,10 +322,78 @@ const getPost = async (req, res) => {
 //     }
 // }
 
+// Comments 
+const setComment = async (req, res) => {
+  try {
+
+    const { token, id, comment, index, count } = req.body;
+    const post = await Post.findById(req.params.id);
+    const isTrueToken = await verifiedAccessToken(token);
+
+    if(post.banned === 1 || post.banned === 2) {
+      res.json({
+        code: 9992,
+        message: 'the post is banned!'
+      })
+    }
+    deletePost();
+    
+    if(isTrueToken && post) {
+
+      const newComment = new Comment({
+        token,
+        id,
+        comment,
+        index,
+        count,
+        // poster: {
+        //   id: "",
+        //   name: "",
+        //   avatar: "",
+        // },
+      });
+      
+      const savedComment = await newComment.save(); 
+
+      res.json({
+        code: 1000,
+        message: "set a comment successful!",
+        data: {
+          id: savedComment._id,
+          comment: savedComment.comment,
+          created: savedComment.created,
+          poster: savedComment.poster,
+          is_blocked: savedComment.is_blocked,
+        }
+      })
+    }
+    else if (!isTrueToken) {
+      res.json({
+        message: "go back to login screen"
+      })
+    }
+    else if (post === null) {
+      res.json({
+        code: 9992,
+        message: "post is not existed"
+      })
+    }
+
+  } catch (err) {
+    res.status(500).json({
+      code: 1001,
+      message: "your internet is disconnected!"
+    });
+  }
+}
+
 module.exports = {
     addPost,
     editPost,
     deletePost,
     getPost,
+    reportPost,
     // getListPost,
+    handleUploadFile,
+    setComment,
 }
