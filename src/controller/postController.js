@@ -335,12 +335,16 @@ const setComment = async (req, res) => {
         code: 9992,
         message: 'the post is banned!'
       })
+      
+      deletePost();
     }
-    deletePost();
-    
+        
     if(isTrueToken && post) {
+      
+      const infoUser = await getInfoUser(token).then(data => data);
+      console.log(infoUser);
 
-      const newComment = new Comment({
+      let newComment = new Comment({
         token,
         id,
         comment,

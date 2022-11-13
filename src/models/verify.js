@@ -10,6 +10,8 @@ const VerifySchema = new Schema(
   {
     id: String,
     startTime: Number,
+    verifyCode: String,
+    verified: Boolean,
   },
   {
     collection: "verify",
