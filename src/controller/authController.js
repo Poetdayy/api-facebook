@@ -1,6 +1,7 @@
 import AccountModel from "../models/accounts";
 import VerifyModel from "../models/verify";
 import UserModel from "../models/users";
+import e from "express";
 
 // Function for check condition - write for condition of auth
 
@@ -142,7 +143,6 @@ function generateToken(phoneNumber, password, uuid, userId) {
   let token = {};
   var jwt = require("jsonwebtoken");
   var crypto = require("crypto");
-  // const keyToSign = uuid.toString() + userId.toString() + phoneNumber.toString() + password.toString();
   try {
     let refreshId = uuid + process.env.jwtSecret;
     let salt = crypto.randomBytes(16).toString("base64");
@@ -187,6 +187,44 @@ function generateRandomSubString(length, string) {
   }
 
   return result;
+}
+
+/**
+ * @author hieubt
+ * @description check if access token is valid
+ * @param {string} token 
+ * @return {Object}
+ */
+async function checkAccessToken(token) {
+  await AccountModel.findOne({ token })
+    .then(result => {
+      if (!result) {
+        return {
+          found: false,
+        }
+      } else {
+        const d = new Date();
+        let now = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+        const expirationAccessTokenDate = new Date(result.expirationAccessTokenDate)
+        if (now - expirationAccessTokenDate > 3600000) {
+          return {
+            found: true,
+            expired: true,
+          }
+        } else {
+          return {
+            found: true,
+            expired: false,
+          }
+        }
+      }
+    })
+    .catch(err => {
+      return {
+        found: false,
+        error: err,
+      }
+    })
 }
 
 // list authAPI
@@ -469,7 +507,6 @@ const get_verify_code = async (req, res) => {
         }
       })
       .catch(err => {
-        console.log(err)
         return res.json({
           code: 1005,
           message: "Unknown error",
@@ -577,4 +614,5 @@ module.exports = {
   logout,
   get_verify_code,
   check_verify_code,
+  checkAccessToken,
 };
