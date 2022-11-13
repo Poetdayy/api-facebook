@@ -5,7 +5,6 @@ const CommentsSchema = new Schema(
     {
       postID: {
         type: String,
-        required: true,
       },
       index: {
         type: String,
@@ -28,7 +27,6 @@ const CommentsSchema = new Schema(
       },
       is_blocked: {
         type: String,
-        required: true,
       }
     },
     { timestamps: true }
