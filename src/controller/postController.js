@@ -11,11 +11,13 @@ const verifiedAccessToken = async (token) => {
   let hasAccessToken = false;
 
   await AccountModel.findOne({token})
-  .then((data) => { 
+  .then((data) => {
     if(data) {
       hasAccessToken = true;
+      console.log(1, hasAccessToken); 
     }
   })
+  console.log(2, hasAccessToken);
 
   return hasAccessToken;
 }
@@ -225,10 +227,10 @@ const reportPost = async (req, res) => {
 
     if(post.banned === 1 || post.banned === 2) {
       
-      deletePost();
+      await deletePost();
 
       res.json({
-        code: 9992,
+        code: 1010,
         message: 'the post is banned!'
       })
     }
@@ -328,8 +330,15 @@ const setComment = async (req, res) => {
     const post = await Post.findById(req.params.id);
     const isTrueToken = await verifiedAccessToken(token);
 
-    res.send("ok");
-    
+    if(post.banned === 1 || post.banned === 2) {
+      res.json({
+        code: 9992,
+        message: 'the post is banned!'
+      })
+      
+      deletePost();
+    }
+        
     if(isTrueToken && post) {
       
       const infoUser = await getInfoUser(token).then(data => data);
@@ -341,26 +350,37 @@ const setComment = async (req, res) => {
         comment,
         index,
         count,
-        poster: {
-          id: infoUser._id ?? "",
-          name: infoUser.name ?? "",
-          avatar: infoUser.avatar ?? "",
-        },
-      })
+        // poster: {
+        //   id: "",
+        //   name: "",
+        //   avatar: "",
+        // },
+      });
       
-      const savedComment = await newComment.save();
+      const savedComment = await newComment.save(); 
 
-      // res.json({
-      //   code: 1000,
-      //   message: "set a comment successful!",
-      //   data {
-      //     id: savedComment._id,
-      //     comment: savedComment.comment,
-      //     created: savedComment.
-      //     poster: savedComment.poster,
-      //     is_blocked: savedComment.is_blocked,
-      //   }
-      // })
+      res.json({
+        code: 1000,
+        message: "set a comment successful!",
+        data: {
+          id: savedComment._id,
+          comment: savedComment.comment,
+          created: savedComment.created,
+          poster: savedComment.poster,
+          is_blocked: savedComment.is_blocked,
+        }
+      })
+    }
+    else if (!isTrueToken) {
+      res.json({
+        message: "go back to login screen"
+      })
+    }
+    else if (post === null) {
+      res.json({
+        code: 9992,
+        message: "post is not existed"
+      })
     }
 
   } catch (err) {
