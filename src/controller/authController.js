@@ -1,7 +1,6 @@
 import AccountModel from "../models/accounts";
 import VerifyModel from "../models/verify";
 import UserModel from "../models/users";
-import e from "express";
 
 // Function for check condition - write for condition of auth
 
