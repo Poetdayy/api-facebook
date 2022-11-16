@@ -1,6 +1,7 @@
 import AccountModel from "../models/accounts";
 import VerifyModel from "../models/verify";
 import UserModel from "../models/users";
+import { verifyJwtToken } from "../utils";
 
 // Function for check condition - write for condition of auth
 
@@ -149,9 +150,10 @@ function generateToken(phoneNumber, password, uuid, userId) {
       .createHmac("sha512", salt)
       .update(refreshId)
       .digest("base64");
-    let accessToken = jwt.sign({ id: userId, phoneNumber, password, uuid }, process.env.jwtSecret, { expiresIn: 3600 });
+    let accessToken = jwt.sign({ id: userId, phoneNumber, password, uuid }, process.env.jwtSecret, { expiresIn: process.env.tokenLife });
     let b = new Buffer.alloc(11, hash, "base64");
-    let refreshToken = b.toString("base64");
+    // let refreshToken = b.toString("base64");
+    let refreshToken = jwt.sign({ id: userId, phoneNumber, password, uuid }, process.env.refreshTokenSecret, { expiresIn: process.env.refreshTokenLife });
     token = {
       accessToken: accessToken,
       refreshToken: refreshToken,
@@ -202,10 +204,11 @@ async function checkAccessToken(token) {
           found: false,
         }
       } else {
+        const expiredTime = 3600000;
         const d = new Date();
         let now = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
         const expirationAccessTokenDate = new Date(result.expirationAccessTokenDate)
-        if (now - expirationAccessTokenDate > 3600000) {
+        if (now - expirationAccessTokenDate > expiredTime) {
           return {
             found: true,
             expired: true,
@@ -594,6 +597,52 @@ const check_verify_code = async (req, res) => {
   }
 };
 
+async function refresh_token(req, res) {
+  const { refreshToken, uuid } = req.body;
+  if (!refreshToken) {
+    return res.json({
+      code: 1002,
+      message: 'Parameter is not enough',
+    })
+  }
+
+  try {
+
+    const jwt = require('jsonwebtoken');
+
+    await verifyJwtToken(refreshToken, process.env.refreshTokenSecret);
+
+    const user = await AccountModel.findOne({
+      refreshToken: refreshToken,
+    })
+      .then(data => {
+        return data;
+      })
+      .catch(err => {
+        console.log(err)
+      })
+
+    const objectToSign = {
+      id: user._id.toString(),
+      phoneNumber: user.phoneNumber,
+      password: user.password,
+      uuid: uuid,
+    }
+    const token = jwt.sign(objectToSign, process.env.jwtSecret, { expiresIn: process.env.tokenLife });
+
+    return res.json({
+      token: token,
+    })
+  } catch (err) {
+    console.log(err)
+    return res.json({
+      code: 1005,
+      message: 'Unknown error',
+      error: err,
+    })
+  }
+}
+
 //! haven't done yet
 const change_info_after_signup = async (req, res) => {
   const { token, username, avatar } = req.body;
@@ -614,4 +663,5 @@ module.exports = {
   get_verify_code,
   check_verify_code,
   checkAccessToken,
+  refresh_token,
 };

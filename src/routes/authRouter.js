@@ -1,5 +1,5 @@
 import express from "express";
-import { signUp, login, logout, get_verify_code, check_verify_code } from "../controller/authController";
+import { signUp, login, logout, get_verify_code, check_verify_code, refresh_token } from "../controller/authController";
 
 let router = express.Router();
 
@@ -14,6 +14,8 @@ let initAuthRoutes = (app) => {
     router.post('/get_verify_code', get_verify_code);
 
     router.post('/check_verify_code', check_verify_code);
+
+    router.post('/refresh_token', refresh_token);
 
     return app.use('/', router);
 }
