@@ -12,6 +12,91 @@ const verifiedAccessToken = async (token) => {
   await AccountModel.findOne({ token }).then((data) => {
     if (data) {
       hasAccessToken = true;
+      console.log(1, hasAccessToken);
+    }
+  });
+  console.log(2, hasAccessToken);
+
+  return hasAccessToken;
+};
+
+const verifiedReportSubjects = (subject) => {
+  let trueReportSubject = false;
+
+  const subjectOptions = [
+    "Ảnh khoả thân",
+    "Bạo lực",
+    "Quấy rối",
+    "Tự tử/Gây thương tích",
+    "Tin giả",
+    "Bán hàng trái phép",
+    "Ngôn từ gây thù ghét",
+    "khủng bố",
+  ];
+
+  if (subjectOptions.find((item) => item === subject)) {
+    trueReportSubject = true;
+  }
+
+  return trueReportSubject;
+};
+
+const getInfoUser = async (token) => {
+  try {
+    await AccountModel.findOne({ token }).then((data) => {
+      if (data) {
+        return data;
+      }
+    });
+  } catch (err) {
+    console.log(err);
+  }
+};
+
+// handle upload file
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, appRoot + "/src/public/images/");
+  },
+
+  filename: function (req, file, cb) {
+    cb(
+      null,
+      file.fieldname + "-" + Date.now() + path.extname(file.originalname)
+    );
+  },
+});
+
+const imageFilter = function (req, file, cb) {
+  // Accept images only
+  if (!file.originalname.match(/\.(jpg|JPG|jpeg|JPEG|png|PNG|gif|GIF)$/)) {
+    req.fileValidationError = "Only image files are allowed!";
+    return cb(new Error("Only image files are allowed!"), false);
+  }
+  cb(null, true);
+};
+
+const handleUploadFile = async (req, res) => {
+  let upload = multer({
+    storage: storage,
+    fileFilter: imageFilter,
+    limits: {
+      fileSize: 1024 * 1024 * 5,
+    },
+  }).single("image");
+
+  upload(req, res, function (err) {
+    // req.file contains information of uploaded file
+    // req.body contains information of text fields, if there were any
+
+    if (req.fileValidationError) {
+      return res.send(req.fileValidationError);
+    } else if (!req.file) {
+      return res.send("Please select an image to upload");
+    } else if (err instanceof multer.MulterError) {
+      return res.send(err);
+    } else if (err) {
+      return res.send(err);
     }
   });
 
@@ -88,10 +173,11 @@ const deletePost = async (req, res) => {
       return;
     }
 
-    console.log("f", post.banned);
     if (post.banned === 1 || post.banned === 2) {
+      await deletePost();
+
       res.json({
-        code: 9992,
+        code: 1010,
         message: "the post is banned!",
       });
     }
@@ -185,7 +271,14 @@ const setComment = async (req, res) => {
     const post = await Post.findById(req.params.id);
     const isTrueToken = await verifiedAccessToken(token);
 
-    res.send("ok");
+    if (post.banned === 1 || post.banned === 2) {
+      res.json({
+        code: 9992,
+        message: "the post is banned!",
+      });
+
+      deletePost();
+    }
 
     if (isTrueToken && post) {
       const infoUser = await getInfoUser(token).then((data) => data);
@@ -197,26 +290,35 @@ const setComment = async (req, res) => {
         comment,
         index,
         count,
-        poster: {
-          id: infoUser._id ?? "",
-          name: infoUser.name ?? "",
-          avatar: infoUser.avatar ?? "",
-        },
+        // poster: {
+        //   id: "",
+        //   name: "",
+        //   avatar: "",
+        // },
       });
 
       const savedComment = await newComment.save();
 
-      // res.json({
-      //   code: 1000,
-      //   message: "set a comment successful!",
-      //   data {
-      //     id: savedComment._id,
-      //     comment: savedComment.comment,
-      //     created: savedComment.
-      //     poster: savedComment.poster,
-      //     is_blocked: savedComment.is_blocked,
-      //   }
-      // })
+      res.json({
+        code: 1000,
+        message: "set a comment successful!",
+        data: {
+          id: savedComment._id,
+          comment: savedComment.comment,
+          created: savedComment.created,
+          poster: savedComment.poster,
+          is_blocked: savedComment.is_blocked,
+        },
+      });
+    } else if (!isTrueToken) {
+      res.json({
+        message: "go back to login screen",
+      });
+    } else if (post === null) {
+      res.json({
+        code: 9992,
+        message: "post is not existed",
+      });
     }
   } catch (err) {
     res.status(500).json({
