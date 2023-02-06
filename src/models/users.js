@@ -16,6 +16,8 @@ const UserSchema = new Schema(
     is_blocked: Boolean,
     online: Boolean,
     friendIds: [{ type: String }],
+    friendRequestIds: [{type: String}],
+    blocked_list: [{type: String}],
   },
   {
     collection: "users",
