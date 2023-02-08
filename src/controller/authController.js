@@ -5,7 +5,7 @@ import { verifyJwtToken } from "../helper/utils";
 
 // Function for check condition - write for condition of auth
 
-const isIdentifiedPhoneNumber = (phonenumber, password) => {
+const isIdentifiedphonenumber = (phonenumber, password) => {
   return phonenumber !== password &&
     phonenumber.charAt(0) === "0" &&
     phonenumber.length === 10
@@ -20,10 +20,13 @@ const isIdentifiedPassword = (password) => {
 const isUsedAccount = async (phonenumber) => {
   let usedAccount = false;
   let isWrong = false;
+  let test = await AccountModel.find({});
+  console.log(test)
   await AccountModel.findOne({
     phonenumber: phonenumber,
   })
     .then((data) => {
+      console.log(data)
       if (data) {
         usedAccount = true;
       } else {
@@ -71,6 +74,7 @@ const isAccountMatch = async (phonenumber, password, uuid) => {
     phonenumber: phonenumber,
   })
     .then(async (account) => {
+      console.log(account)
       if (account) {
         var crypto = require("crypto");
         let passwordField = account.password.split("$");
@@ -252,7 +256,7 @@ let signUp = async (req, res) => {
   const { phonenumber, password, uuid } = req.body;
 
   const isTrueUsedAccount = await isUsedAccount(phonenumber);
-  const isTruePhoneNumber = isIdentifiedPhoneNumber(phonenumber, password);
+  const isTruephonenumber = isIdentifiedphonenumber(phonenumber, password);
   const isTruePassword = isIdentifiedPassword(password);
 
   if (isTrueUsedAccount.isWrong) {
@@ -270,9 +274,9 @@ let signUp = async (req, res) => {
     });
   }
 
-  if (isTruePhoneNumber && isTruePassword && !isTrueUsedAccount) {
+  if (isTruephonenumber && isTruePassword && !isTrueUsedAccount) {
     AccountModel.create({
-      phoneNumber: phonenumber,
+      phonenumber: phonenumber,
       password: encodePassword(password),
       uuid: uuid,
       token: "",
@@ -285,7 +289,7 @@ let signUp = async (req, res) => {
         UserModel.create({
           id: data._id,
           username: "",
-          phoneNumber: phonenumber,
+          phonenumber: phonenumber,
           created: date.toISOString(),
           avatar: "",
           is_blocked: false,
@@ -313,7 +317,7 @@ let signUp = async (req, res) => {
           error: err,
         });
       });
-  } else if (!isTruePhoneNumber) {
+  } else if (!isTruephonenumber) {
     return res.json({
       code: "1004",
       message: "Phone number is invalid",
@@ -350,9 +354,9 @@ const login = async (req, res) => {
 
     const passwordIsValid = isIdentifiedPassword(password);
 
-    const phoneNumberIsValid = isIdentifiedPhoneNumber(phonenumber);
+    const phonenumberIsValid = isIdentifiedphonenumber(phonenumber);
 
-    if (!passwordIsValid || !phoneNumberIsValid) {
+    if (!passwordIsValid || !phonenumberIsValid) {
       return res.json({
         code: "1004",
         message: "Parameter value is invalid.",
@@ -459,7 +463,7 @@ const get_verify_code = async (req, res) => {
   var currentTime = new Date().getTime();
   let isGranted;
   let verifyCode;
-  const accountCheck = await isUsedAccount(req.body.phoneNumber);
+  const accountCheck = await isUsedAccount(req.body.phonenumber);
   if (accountCheck.isWrong) {
     return res.json({
       code: "1005",
@@ -472,8 +476,8 @@ const get_verify_code = async (req, res) => {
       message: "User is not validated",
     });
   } else {
-    let phoneNumber = req.body.phoneNumber;
-    let account = await AccountModel.findOne({ phoneNumber });
+    let phonenumber = req.body.phonenumber;
+    let account = await AccountModel.findOne({ phonenumber });
     let accountId = account._id.toString();
     await VerifyModel.findOne({
       _id: accountId,
@@ -557,16 +561,16 @@ const get_verify_code = async (req, res) => {
  * @returns {JSON}
  */
 const check_verify_code = async (req, res) => {
-  const { phoneNumber, verifyCode } = req.body;
+  const { phonenumber, verifyCode } = req.body;
 
-  if (!phoneNumber || !verifyCode) {
+  if (!phonenumber || !verifyCode) {
     return res.json({
       code: "1002",
       message: "Parameter is not enough",
     });
   }
 
-  if (!isIdentifiedPhoneNumber(phoneNumber)) {
+  if (!isIdentifiedphonenumber(phonenumber)) {
     return res.json({
       code: "1004",
       message: "Parameter value is invalid",
@@ -574,7 +578,7 @@ const check_verify_code = async (req, res) => {
   }
 
   try {
-    await AccountModel.findOne({ phoneNumber })
+    await AccountModel.findOne({ phonenumber })
       .then(async (account) => {
         if (!account) {
           return res.json({
@@ -656,7 +660,7 @@ async function refresh_token(req, res) {
 
         const objectToSign = {
           id: user._id.toString(),
-          phoneNumber: user.phoneNumber,
+          phonenumber: user.phonenumber,
           password: user.password,
           uuid: uuid,
         };
@@ -718,13 +722,13 @@ const change_info_after_signup = async (req, res) => {
                   let specialChar = /[ `!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
                   let minLength = 2;
                   let maxLength = 10;
-                  // const blockCondition = !specialChar.test(username) && (username < minLength || username > maxLength) && (username === data.phoneNumber);
+                  // const blockCondition = !specialChar.test(username) && (username < minLength || username > maxLength) && (username === data.phonenumber);
                   let blockCondition;
                   if (
                     !specialChar.test(username) &&
                     username.length >= minLength &&
                     username.length <= maxLength &&
-                    username != data.phoneNumber
+                    username != data.phonenumber
                   ) {
                     data.username = username;
                     data.avatar = avatar;
@@ -735,7 +739,7 @@ const change_info_after_signup = async (req, res) => {
                       data: {
                         id: data.id,
                         username: data.username,
-                        phoneNumber: data.phoneNumber,
+                        phonenumber: data.phonenumber,
                         created: data.created,
                         avatar: data.avatar,
                       },

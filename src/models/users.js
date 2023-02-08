@@ -1,7 +1,7 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
-mongoose.connect("mongodb://localhost/api-facebook", {
+mongoose.connect('mongodb://localhost/api-facebook', {
   useNewURLParser: true,
   useUnifieDTopology: true,
 });
@@ -10,21 +10,21 @@ const UserSchema = new Schema(
   {
     id: String,
     username: String,
-    phoneNumber: String,
+    phonenumber: String,
     created: Date,
     avatar: String,
     is_blocked: Boolean,
     online: Boolean,
-    friendIds: [{ type: String }],
-    friendRequestIds: [{type: String}],
-    blocked_list: [{type: String}],
-    suggested_friendIds: [{type: String}],
+    friendIds: [{ type: String, created: Date }],
+    friendRequestIds: [{ type: String }],
+    blocked_list: [{ type: String }],
+    suggested_friendIds: [{ type: String, created: Date }],
   },
   {
-    collection: "users",
+    collection: 'users',
   }
 );
 
-const UserModel = mongoose.model("users", UserSchema);
+const UserModel = mongoose.model('users', UserSchema);
 
 module.exports = UserModel;
