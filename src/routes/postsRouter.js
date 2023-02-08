@@ -1,36 +1,37 @@
 import express from "express";
+
 import {
   addPost,
   editPost,
   getPost,
   deletePost,
   reportPost,
-  handleUploadFile,
   setComment,
 } from "../controller/postController";
 
-// handle router
+import { uploadImage, uploadVideo } from "../helper/utils";
 
+// handle router
 let router = express.Router();
 
 let initPostsRoutes = (app) => {
-  router.post("/", handleUploadFile, addPost);
+  router.post("/add_post", uploadImage, addPost);
 
-  router.post("/:id", reportPost);
+  router.delete("/delete_post", deletePost);
 
-  router.post("/:id/comment", setComment);
+  router.post("/report_post", reportPost);
 
-  router.get("/:id", getPost);
-
-  router.put("/:id", editPost);
-
-  router.delete("/:id", deletePost);
+  // router.get('/get_post', getPost);
 
   // router.get('/:id', getPosts);
 
-  router.get("/:id/likePost", getLike);
+  // router.put('/:id', editPost);
 
-  return app.use("/api/posts", router);
+  // router.post('/:id/comment', setComment);
+
+  // router.get('/:id/likePost', getLike);
+
+  return app.use("/post", router);
 };
 
 module.exports = initPostsRoutes;
