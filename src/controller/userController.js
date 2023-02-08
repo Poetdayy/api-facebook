@@ -27,14 +27,14 @@ import _ from 'lodash';
  */
 
 /**
+ * This function returns a promise that resolves to an object with a found property that is either true
+ * or false, and if true, a foundUser property that is the user object.
  * @author hieubt
- * @description find user by account's id
- *
- * @param {string} accountId
- * @return {Promise<{found: boolean, foundUser?: User, error?: Object}>}
+ * @param {string} accountId - The account id of the user you want to find.
+ * @returns {Promise<{found: boolean, foundUser?: User, error?: Object}>}
  */
 async function getUserByAccountId(accountId) {
-  await UserModel.findOne({ id: accountId })
+  return await UserModel.findOne({ id: accountId })
     .then((result) => {
       if (!result) {
         return {
@@ -56,10 +56,11 @@ async function getUserByAccountId(accountId) {
 }
 
 /**
+ * It takes two user_ids as input and returns the number of friends they have in common
  * @author hieubt
- * @param {string} currentUserId
- * @param {string} destinationUserId
- * @returns {Promise<SameFriendResponse>}
+ * @param {string} currentUserId - The account_id of the current user
+ * @param {string} destinationUserId - The user_id of the user you want to find the same friends with.
+ * @returns {Promise<SameFriendResponse>} An object with three properties: result, same and error.
  */
 async function findSameFriends(currentUserId, destinationUserId) {
   let currentUser = await getUserByAccountId(currentUserId);
@@ -196,8 +197,8 @@ const get_list_suggested_friend = async (req, res) => {
               if (user.found) {
                 let allUsers = await UserModel.find({});
                 allUsers.forEach(async (elem) => {
-                  let same = findSameFriends(user.foundUser.id, elem.id);
-                  if (same >= 2) {
+                  let same = await findSameFriends(user.foundUser.id, elem.id);
+                  if (same.result === 'success' && same.same >= 2) {
                     data.push({
                       user_id: elem.id,
                       username: elem.username,
@@ -414,6 +415,10 @@ const set_block = async (req, res) => {
     });
   }
 };
+
+const get_requested_friend = async(req, res) => {
+  const {token, index, count} = req.body;
+}
 
 // try {
 
