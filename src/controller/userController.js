@@ -2,13 +2,36 @@
 import UserModel from '../models/users';
 import { verifyJwtToken } from '../helper/utils';
 import AccountModel from '../models/accounts';
+import _ from 'lodash';
+
+/**
+ * @typedef User
+ * @property {string} id
+ * @property {string} username
+ * @property {string} phoneNumber
+ * @property {Date} created
+ * @property {string} avatar
+ * @property {boolean} is_blocked
+ * @property {boolean} online
+ * @property {string[]} friendIds
+ * @property {string[]} friendRequestIds
+ * @property {string[]} blocked_list
+ * @property {string[]} suggested_friendIds
+ */
+
+/**
+ * @typedef SameFriendResponse
+ * @property {'failed' | 'success'} result
+ * @property {number} same
+ * @property {string} error
+ */
 
 /**
  * @author hieubt
  * @description find user by account's id
  *
  * @param {string} accountId
- * @return {Object}
+ * @return {Promise<{found: boolean, foundUser?: User, error?: Object}>}
  */
 async function getUserByAccountId(accountId) {
   await UserModel.findOne({ id: accountId })
@@ -32,6 +55,48 @@ async function getUserByAccountId(accountId) {
     });
 }
 
+/**
+ * @author hieubt
+ * @param {string} currentUserId
+ * @param {string} destinationUserId
+ * @returns {Promise<SameFriendResponse>}
+ */
+async function findSameFriends(currentUserId, destinationUserId) {
+  let currentUser = await getUserByAccountId(currentUserId);
+  let destinationUser = await getUserByAccountId(destinationUserId);
+  if (currentUser.found && destinationUser.found) {
+    if (
+      _.isEmpty(currentUser.foundUser.friendIds) ||
+      _.isEmpty(destinationUser.foundUser.friendIds)
+    ) {
+      return {
+        result: 'success',
+        same: 0,
+      };
+    } else {
+      let sameFriends = currentUser.foundUser.friendIds.filter((elem) =>
+        destinationUser.foundUser.friendIds.includes(elem)
+      );
+      return {
+        result: 'success',
+        same: sameFriends.length,
+      };
+    }
+  } else {
+    return {
+      result: 'failed',
+      error: 'Wrong user_id',
+    };
+  }
+}
+
+/**
+ * @description need test
+ * @author hieubt
+ * @param {Object} req
+ * @param {Object} res
+ * @returns {JSON}
+ */
 const set_accept_friend = async (req, res) => {
   const { token, user_id, is_accept } = req.body;
   if (!token || !user_id || !is_accept) {
@@ -66,7 +131,16 @@ const set_accept_friend = async (req, res) => {
                     message: 'OK',
                   });
                 } else if (is_accept.toString() === '0') {
-                  //TODO: delete suggested friend
+                  if (
+                    !_.isEmpty(result.suggested_friendIds) &&
+                    result.suggested_friendIds.includes(user_id)
+                  ) {
+                    let tmp = result.suggested_friendIds;
+                    result.suggested_friendIds = tmp.splice(
+                      result.suggested_friendIds.indexOf(user_id)
+                    );
+                    await result.save();
+                  }
                   return res.json({
                     code: '1000',
                     message: 'OK',
@@ -96,8 +170,75 @@ const set_accept_friend = async (req, res) => {
   }
 };
 
-//TODO
-const get_list_suggested_friend = async (req, res) => {};
+/**
+ * @description need test
+ * @author hiebt
+ * @param {Object} req
+ * @param {Object} res
+ * @returns {JSON}
+ */
+const get_list_suggested_friend = async (req, res) => {
+  const { token, index, count } = req.body;
+  if (!token || !index || !count) {
+    return res.json({
+      code: '1002',
+      message: 'Parameter is not enough',
+    });
+  } else {
+    await verifyJwtToken(token, process.env.jwtSecret)
+      .then(async () => {
+        await AccountModel.findOne({ token: token })
+          .then(async (response) => {
+            if (response) {
+              let data = [];
+              let suggested_id = [];
+              let user = await getUserByAccountId(response._id);
+              if (user.found) {
+                let allUsers = await UserModel.find({});
+                allUsers.forEach(async (elem) => {
+                  let same = findSameFriends(user.foundUser.id, elem.id);
+                  if (same >= 2) {
+                    data.push({
+                      user_id: elem.id,
+                      username: elem.username,
+                      avatar: elem.avatar,
+                      same_friends: same,
+                    });
+                    if (!suggested_id.includes(elem.id)) {
+                      suggested_id.push(elem.id);
+                    }
+                  }
+                });
+              } else {
+                return res.json({
+                  code: '9998',
+                  message: 'Token is invalid',
+                });
+              }
+              user.foundUser.suggested_friendIds = suggested_id;
+              await user.foundUser.save();
+              return res.json({
+                code: '1000',
+                message: 'OK',
+                data: JSON.stringify(data),
+              });
+            }
+          })
+          .catch((err) => {
+            return res.json({
+              code: '1005',
+              message: 'Unknown error',
+            });
+          });
+      })
+      .catch((err) => {
+        return res.json({
+          code: '1005',
+          message: 'Unknown error',
+        });
+      });
+  }
+};
 
 /**
  * @description need test
@@ -242,7 +383,6 @@ const get_list_blocks = async (req, res) => {
   }
 };
 
-
 /**
  * @description set block 1 or unblock 0 for user
  * @author dunglda
@@ -251,7 +391,6 @@ const get_list_blocks = async (req, res) => {
  * @returns {JSON}
  */
 const set_block = async (req, res) => {
-
   const { token, user_id, type } = req.body;
   if (!token || !user_id || !type) {
     return res.json({
@@ -259,105 +398,102 @@ const set_block = async (req, res) => {
       message: 'Parameter is not enough',
     });
   } else {
-    await verifyJwtToken(token, process.env.jwtSecret)
-    .then(async () => {
-      await AccountModel.findOne({ token: token })
-        .then(async (response) => {
-          if (response) {
-            return res.json({
-              code: '1004',
-              message: 'Parameter value is invalid',
-            });
-          } else {
-            return res.status(200).json({
-              message: "ok",
-            })
-          }
-        }); 
-    })
+    await verifyJwtToken(token, process.env.jwtSecret).then(async () => {
+      await AccountModel.findOne({ token: token }).then(async (response) => {
+        if (response) {
+          return res.json({
+            code: '1004',
+            message: 'Parameter value is invalid',
+          });
+        } else {
+          return res.status(200).json({
+            message: 'ok',
+          });
+        }
+      });
+    });
   }
-}
+};
 
-  // try {
+// try {
 
-  //   const trueAccessToken = existAccessToken(token);
-  //   const trueType = 0 || 1;
+//   const trueAccessToken = existAccessToken(token);
+//   const trueType = 0 || 1;
 
-  //   //Testcase 2: Wrong access token
-  //   if (trueAccessToken) {
+//   //Testcase 2: Wrong access token
+//   if (trueAccessToken) {
 
-  //     const user = await UserModel.findOne(token);
-  //     if (user) {
-  //       if (user.is_blocked === 1) {
-  //         return res.status(403).json({
-  //           code: "1001",
-  //           message: "Wrong access token, go back login screen!",
-  //         })
-  //       }
-  //     }
+//     const user = await UserModel.findOne(token);
+//     if (user) {
+//       if (user.is_blocked === 1) {
+//         return res.status(403).json({
+//           code: "1001",
+//           message: "Wrong access token, go back login screen!",
+//         })
+//       }
+//     }
 
-  //     if (user._id === user_id) {
-  //       return res.status(403).json({
-  //         message: "It's user_id of your own"
-  //       })
-  //     }
+//     if (user._id === user_id) {
+//       return res.status(403).json({
+//         message: "It's user_id of your own"
+//       })
+//     }
 
-  //     const blockUser = await UserModel.findById(user_id)
-  //     if (blockUser) {
-  //       //Testcase 7: User has is_blocked!
-  //       if (blockUser.is_blocked === 1) {
-  //         return res.json(403).json({
-  //           message: "User has is_blocked!"
-  //         })
-  //       }
+//     const blockUser = await UserModel.findById(user_id)
+//     if (blockUser) {
+//       //Testcase 7: User has is_blocked!
+//       if (blockUser.is_blocked === 1) {
+//         return res.json(403).json({
+//           message: "User has is_blocked!"
+//         })
+//       }
 
-  //       //Testcase 8: Wrong TrueType!
-  //       if (trueType) {
-  //         if (trueType === 1 && blockUser.is_blocked === 1) {
-  //             return res.json(500).status({
-  //               message: "user has been blocked!"
-  //             })
-  //         } else if (trueType === 0 && blockUser.is_blocked === 0) {
-  //             return res.json(500).status({
-  //               message: "user has not block"
-  //             })
-  //         } else {
-  //             await UserModel.updateOne({user_id}, {
-  //                 is_blocked: trueType,
-  //               })
-                
-  //             return res.json(403).json({
-  //               code: "1000",
-  //               message: "set block successfully!"
-  //             })
-  //         }
-              
-  //       } else {
-  //         return res.json(403).json({
-  //           message: "Type must be 0 or 1"
-  //         })
-  //       }
-      
-  //     } else {
-  //       return res.json(403).json({
-  //         message: "Not found blockUser!"
-  //       })
-  //     }
-    
-    // } else {
-    //   res.status(403).json({
-    //     code: "1001",
-    //     message: "Wrong access token, go back login screen!",
-    //   })
-    // }
+//       //Testcase 8: Wrong TrueType!
+//       if (trueType) {
+//         if (trueType === 1 && blockUser.is_blocked === 1) {
+//             return res.json(500).status({
+//               message: "user has been blocked!"
+//             })
+//         } else if (trueType === 0 && blockUser.is_blocked === 0) {
+//             return res.json(500).status({
+//               message: "user has not block"
+//             })
+//         } else {
+//             await UserModel.updateOne({user_id}, {
+//                 is_blocked: trueType,
+//               })
 
-  // } catch (err) {
-  //   res.status(500).json({
-  //     code: "9999",
-  //     message: "Server failed to post!" + err,
-  //   });
-  // }  
+//             return res.json(403).json({
+//               code: "1000",
+//               message: "set block successfully!"
+//             })
+//         }
 
+//       } else {
+//         return res.json(403).json({
+//           message: "Type must be 0 or 1"
+//         })
+//       }
+
+//     } else {
+//       return res.json(403).json({
+//         message: "Not found blockUser!"
+//       })
+//     }
+
+// } else {
+//   res.status(403).json({
+//     code: "1001",
+//     message: "Wrong access token, go back login screen!",
+//   })
+// }
+
+// } catch (err) {
+//   res.status(500).json({
+//     code: "9999",
+//     message: "Server failed to post!" + err,
+//   });
+// }
 
 module.exports = {
   getUserByAccountId,
@@ -365,4 +501,5 @@ module.exports = {
   set_request_friend,
   get_list_blocks,
   set_block,
-}
+  get_list_suggested_friend,
+};
