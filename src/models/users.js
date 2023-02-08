@@ -18,6 +18,7 @@ const UserSchema = new Schema(
     friendIds: [{ type: String }],
     friendRequestIds: [{type: String}],
     blocked_list: [{type: String}],
+    suggested_friendIds: [{type: String}],
   },
   {
     collection: "users",
