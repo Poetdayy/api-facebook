@@ -8,12 +8,15 @@ mongoose.connect("mongodb://localhost/api-facebook", {
 
 const UserSchema = new Schema(
   {
-    id: String,
+    id: {
+      type: String,
+      ref: "accounts",
+    },
     username: String,
     phoneNumber: String,
     created: Date,
     avatar: String,
-    is_blocked: Boolean,
+    is_blocked: String,
     online: Boolean,
     friendIds: [{ type: String }],
     friendRequestIds: [{type: String}],

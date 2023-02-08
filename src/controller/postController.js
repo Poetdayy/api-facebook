@@ -1,8 +1,7 @@
 import Post from "../models/posts";
 import AccountModel from "../models/accounts";
-import Comment from "../models/comments";
-import UserModel from "../models/users";
 import { verifyJwtToken } from '../helper/utils';
+import UserModel from "../models/users"
 import e from "express";
 
 const TRUE_STATUS = ["happy", "angry", "sad"];
@@ -61,6 +60,7 @@ const addPost = async (req, res) => {
             described: described ?? '' ,
             status: status ?? '',
             banned: 0,
+            likes: [],
           })
 
           const post = await savedPost.save();
@@ -318,22 +318,34 @@ const reportPost = async (req, res) => {
 // }
 
 // Comments 
-const set_comment = async (req, res) => {
+const get_comment = async (req, res) => {
+  const postComments = comments.filter(comment => comment.postId === id);
+
+  if (index && count) {
+    const start = index * count;
+    const end = start + count;
+    const limitedPostComments = postComments.slice(start, end);
+    return res.json({ success: true, code: 1000, message: 'OK', comments: limitedPostComments });
+  }
+}
+
+
+const setComment = async (req, res) => {
   try {
     const { token, id, comment, index, count } = req.body;
-    if (!token && !id && comment && index && count) {
+    if (!token || !id || !comment || !index || !count) {
       return res.json({
         code: "1002",
         message: "Parameter is not enough",
       });
-    }
+    } 
 
     if ( 
       typeof token !== "string" ||
       typeof id !== "string" ||
       typeof comment !== "string" ||
-      typeof index !== "string" ||
-      typeof count !== "string"
+      typeof Number(index) !== "number" ||
+      typeof Number(count) !== "number" 
     ) {
       res.status(422).json({ message: "Invalid data"})
       return;
@@ -341,7 +353,10 @@ const set_comment = async (req, res) => {
       await verifyJwtToken(token, process.env.jwtSecret)
           .then(async () => {
 
-            const user = await AccountModel.findOne({token});
+            const account = await AccountModel.findOne({token});
+            const userId = account._id;
+            const user = await UserModel.findOne({ id: account._id });
+            console.log(user);
             if (user) {
               if (user.is_blocked === 1 ) {
                 return res.json({
@@ -369,14 +384,54 @@ const set_comment = async (req, res) => {
                 return;
               } else {
 
-                post.update({banned}, {$set: {banned: '1'}});
+                const userId = user._id.toString();
+                const username = user.username;
+                console.log(username);
+                const userAvatar = user.avatar;
 
-                return res.status(200).json({
-                  code: 1000,
-                  message: "the post has reported successfully!"
-                })
+                const new_comment = {
+                  poster: {
+                    id: userId ?? "",
+                    name: username ?? "",
+                    avatar: userAvatar ?? "",
+                  },
+                  comment: comment,
+                  timestamp: new Date(),
+                };
+                console.log(new_comment);
+                post.comments.push(new_comment);
+
+                try {
+                  post.save();
+                } catch (err) {
+                  console.log(err);
+                  res.status(500).json({ msg: err });
+                  return;
+                }
+                
+                return res.status(200).json({ 
+                  code: "1000",
+                  message: "set comment success!",
+                  data: {
+                    id: post._id || "",
+                    comment: post.comments[0].comment,
+                    created: post.comments[0].timestamp,
+                    poster: {
+                      id: post.comments[0].poster.id,
+                      name: post.comments[0].poster.name,
+                      avatar: post.comments[0].poster.avatar
+                    },
+                    is_blocked: user.is_blocked ?? "",
+                  }
+                });
+
               }
             }  
+          }).catch(err => {
+            return res.json({
+              code: '1005',
+              message: 'expired token, go to login page' + err,
+            });
           });
         }
 
@@ -388,6 +443,71 @@ const set_comment = async (req, res) => {
   }
 }
 
+const like = async (req, res) => {
+    const { token, id } = req.body;
+    if (!token || !id) {
+      return res.json({
+        code: "1002",
+        message: "Parameter is not enough",
+      });
+    }
+
+    if ( 
+      typeof token !== "string" ||
+      typeof id !== "string" 
+    ) {
+      res.status(422).json({ message: "Invalid data"})
+      return;
+    } else {
+      
+      await verifyJwtToken(token, process.env.jwtSecret)
+      .then(async () => {
+        let postFind = null;
+        try {
+          postFind = await Post.findById(id);
+        } catch (err) {
+          res.json({msg: err});
+          return;
+        }
+
+        if (postFind === null) {
+          res.status(422).json({message: "Not found post!"})
+          return;
+        }
+
+        const userId = await UserModel.findOne({token});
+        // Nếu likes[] chứa userid thì unlike, ngược lại thì like 
+        if (userId && postFind.likes.includes(userId.id)) {
+          let newLikes = postFind.likes.filter((item) => item !== userId.id);
+          postFind.likes = newLikes;
+        } else {
+          postFind.likes.push(userId.id);
+        }
+        
+        try {
+          await postFind.save();
+
+          return res.status(200).json({
+              code: "1000",
+              message: "like/unlike successfully!",
+              data: {
+                like: postFind.likes.length,
+              }
+          });
+        } catch {
+          res.status(500).json({msg: "Not connect Internet"});
+          return;
+        }
+
+      }).catch(err => {
+        return res.json({
+          code: '1005',
+          message: 'expired token, go to login page' + err,
+        });
+      });
+  }
+}
+
 
 module.exports = {
     addPost,
@@ -395,5 +515,7 @@ module.exports = {
     deletePost,
     // getPost,
     reportPost,
-    // getListPost, b b
+    // getListPost, 
+    like,
+    setComment,
 }
