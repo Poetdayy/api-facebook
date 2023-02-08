@@ -1,40 +1,11 @@
 import Post from "../models/posts";
 import AccountModel from "../models/accounts";
 import Comment from "../models/comments";
-import multer from "multer";
-import path from "path";
+import UserModel from "../models/users";
+import { verifyJwtToken } from '../helper/utils';
+import e from "express";
 
-const appRoot = require('app-root-path');
-
-const verifiedAccessToken = async (token) => {
-  
-  let hasAccessToken = false;
-
-  await AccountModel.findOne({token})
-  .then((data) => {
-    if(data) {
-      hasAccessToken = true;
-      console.log(1, hasAccessToken); 
-    }
-  })
-  console.log(2, hasAccessToken);
-
-  return hasAccessToken;
-}
-
-const verifiedReportSubjects = (subject) => {
-
-  let trueReportSubject = false;
-  
-  const subjectOptions = ['Ảnh khoả thân', 'Bạo lực', 'Quấy rối', 'Tự tử/Gây thương tích', 'Tin giả', 'Bán hàng trái phép', 'Ngôn từ gây thù ghét', 'khủng bố'];
-
-  if(subjectOptions.find(item => item === subject))
-  {
-    trueReportSubject = true;
-  }
-
-  return trueReportSubject;
-}
+const TRUE_STATUS = ["happy", "angry", "sad"];
 
 const getInfoUser = async (token) => {
   try {
@@ -49,209 +20,248 @@ const getInfoUser = async (token) => {
   }
 }
 
-// handle upload file 
-const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-      cb(null, appRoot + '/src/public/images/');
-  },
-
-  filename: function(req, file, cb) {
-      cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-  }
-});
-
-const imageFilter = function(req, file, cb) {
-  // Accept images only
-  if (!file.originalname.match(/\.(jpg|JPG|jpeg|JPEG|png|PNG|gif|GIF)$/)) {
-      req.fileValidationError = 'Only image files are allowed!';
-      return cb(new Error('Only image files are allowed!'), false);
-  }
-  cb(null, true);
-}
-
-const handleUploadFile = async (req, res) => {
-  let upload = multer({
-    storage: storage,
-    fileFilter: imageFilter,
-    limits: {
-      fileSize: 1024 * 1024 * 5,
-    }
-  }).single('image')
-
-  upload(req, res, function(err) {
-    // req.file contains information of uploaded file
-    // req.body contains information of text fields, if there were any
-
-    if (req.fileValidationError) {
-        return res.send(req.fileValidationError);
-    }
-    else if (!req.file) {
-        return res.send('Please select an image to upload');
-    }
-    else if (err instanceof multer.MulterError) {
-        return res.send(err);
-    }
-    else if (err) {
-        return res.send(err);
-    }
-
-  });
-
-}
-
 // List API used for Post Status
+/**
+ * @author dunglda
+ * @description add a post after login 
+ * @param {Object} req
+ * @param {Object} res
+ * @returns {string}
+ */
 const addPost = async (req, res) => {
-  
-    const { token, described } = req.body;
-    const newPost = new Post(req.body);
+
+    const { token, described, status } = req.body;
+    if (!token) {
+      return res.json({
+        code: "1002",
+        message: "Parameter is not enough",
+      });
+    }
+    
+    if ( 
+      typeof token !== "string" ||
+      typeof described !== "string" ||
+      typeof status !== "string"
+    ) {
+      res.status(422).json({ message: "Invalid data"})
+      return;
+    }
 
     try {
-      const trueAccessToken = await verifiedAccessToken(token);
       
-      if (described !== "" && described.length <= 100 && trueAccessToken) {
-        const savedPost = await newPost.save();
+      await verifyJwtToken(token, process.env.jwtSecret).then(async () => {
+        const truePost = TRUE_STATUS.includes(status) && (described !== "");
+        let imageArray = [];
+        imageArray.push(req.file.path);
 
-        return res.status(200).json({
-          code: 1000,
-          message: "Post created successfully!",
-          data: {
-            id: savedPost._id,
-            url: savedPost.url ?? '',
-          },
-        });
-      } else {
-        res.json({
-          message: "go back the login screen!"
-        });
-      }
+        if (truePost) {
+          const savedPost = new Post({
+            image: imageArray ?? '',
+            video: [] ?? '',
+            described: described ?? '' ,
+            status: status ?? '',
+            banned: 0,
+          })
 
+          const post = await savedPost.save();
+
+          return res.status(200).json({
+            code: "1000",
+            message: "Post created successfully!",
+            data: {
+              id: post.id ?? '',
+              url: post.url ?? '',
+            },
+          }); 
+        } else {
+          res.status(400).json({
+            code: "1001",
+            message: "Post created failed! Check parameters!"
+          })
+        }
+
+      }).catch(err => {
+        return res.json({
+          code: '1005',
+          message: 'expired token, go to login page' + err,
+        })
+      })
     } catch (err) {
         res.status(500).json({
           code: "9999",
-          message: err
+          message: "Server failed to post!" + err,
         });
-    }
+    }  
 }
 
-const editPost = async (req, res) => {
+// const editPost = async (req, res) => {
   
-  const { userId, accept_block } = req.body;
+//   const { token, id, described, status, image, image_del, image_sort, video, thumb, auto_accept, auto_block } = req.body;
+//   if(!userId && !accept_block)
 
-  try {
+//   try {
     
-    const post = await Post.findById(req.params.id);
+//     const post = await Post.findById(req.params.id);
 
-    if(post.userId === userId && accept_block === 0 ) {
+//     if(post.userId === userId && accept_block === 0 ) {
         
-        await post.updateOne({ $set: req.body });
+//         await post.updateOne({ $set: req.body });
         
-        res.status(200).json({
-            code: 1000,
-            message: "your post has been update",
-        });   
-    } else if(accept_block === 1) {
-      res.json({
-        code: 1010,
-        message: "Your content is inappropriate!"
-      })
-    } else {
-      res.status(403).json("You can update only your post");  
-    }
+//         res.status(200).json({
+//             code: 1000,
+//             message: "your post has been update",
+//         });   
+//     } else if(accept_block === 1) {
+//       res.json({
+//         code: 1010,
+//         message: "Your content is inappropriate!"
+//       })
+//     } else {
+//       res.status(403).json("You can update only your post");  
+//     }
 
-  } catch (error) {
-    res.status(500).json(error);
-  }
-}
+//   } catch (error) {
+//     res.status(500).json(error);
+//   }
+// }
 
 const deletePost = async (req, res) => {
     try {
-        const { token } = req.body;
-        const post = await Post.findById(req.params.id);
-        const trueAccessToken = await verifiedAccessToken(token); 
+        const { token, id } = req.body;
+        
+        if (!token || !id) {
+          return res.json({
+            code: "1002",
+            message: "Parameter is not enough",
+          });
+        } else {
+          await verifyJwtToken(token, process.env.jwtSecret)
+          .then(async () => {
 
-        if (post === null) {
-          res.status(403).json({
-            code: 9992,
-            message: "post is not existed"
-          })
+            const user = await AccountModel.findOne({token});
+            if (user) {
+              if ( user.is_blocked === 1 ) {
+                return res.json({
+                  code: '1005',
+                  message: 'expired token, go to login page' + err,
+                })
+              }
+            }
 
-          return;
-        } 
+            const post = await Post.findById(id);
+            if (!post) {
+              res.status(403).json({
+                code: 9992,
+                message: "post is not existed"
+              });
+              return;
+            } else {
+              if (post.banned === "1" || post.banned === "2") {
+                res.json({
+                  code: 9992,
+                  message: 'the post is banned!'
+                });
 
-        if(post.banned === 1 || post.banned === 2) {
-          res.json({
-            code: 9992,
-            message: 'the post is banned!'
-          })
+                await post.deleteOne();
+                return;
+              } else {
+                await post.deleteOne();
+                return res.status(200).json({
+                  code: 1000,
+                  message: "the post has been deleted"
+                })
+              }
+            }   
+     
+          }).catch(err => {
+            return res.json({
+              code: '1005',
+              message: 'expired token, go to login page' + err,
+            });
+          });
         }
         
-        if (trueAccessToken) {
-          await post.deleteOne();
-            
-          res.status(200).json({
-            code: 1000,
-            message: "the post has been deleted"
-          });
-
-        } else if(!trueAccessToken) {
-          res.json({
-            message: "go back to login screen"
-          })
-        } else {
-          res.status(403).json({
-            code: 9992,
-            message: "post is not existed"
-          });
-        }  
     } catch (err) {
         res.status(500).json({
           code: 1001,
-          message: "your internet is disconnected!"
+          message: "Your internet is disconnected!"
         });
     }
 }
 
 const reportPost = async (req, res) => {
   try {
-    const { token, subject, details } = req.body;
-    const post = await Post.findById(req.params.id);
-    const isTrueToken = await verifiedAccessToken(token);
-    const isTrueReportSubject = verifiedReportSubjects(subject);
+    const { token, id, subject, details } = req.body;
 
-    if (post === null) {
-      res.status(403).json({
-        code: 9992,
-        message: "post is not existed"
-      })
-    }
+    const SUBJECT = ["Bạo lực", "Khỏa thân", "Chất cấm"];
+    const trueReport = SUBJECT.includes(subject);
 
-    if(post.banned === 1 || post.banned === 2) {
-      
-      await deletePost();
 
-      res.json({
-        code: 1010,
-        message: 'the post is banned!'
-      })
-    }
-
-    if(isTrueToken && isTrueReportSubject && details) {
-      res.status(200).json({
-        code: 1000,
-        message: "report post successful!"
-      })
-    }
-    else if(!isTrueToken) {
-      res.json({
-        message: "go back to login screen"
-      })
-    }
-    else {
-      res.status(403).json({
-        code: 9992,
-        message: "post is not existed"
+    if (!(token || id || subject || details)) {
+      return res.json({
+        code: "1002",
+        message: "Parameter is not enough",
       });
     }
+    
+    if ( 
+      typeof token !== "string" ||
+      typeof id !== "string" ||
+      typeof subject !== "string" ||
+      typeof details !== "string"      
+    ) {
+      res.status(422).json({ message: "Invalid data"})
+      return;
+    } else {
+      await verifyJwtToken(token, process.env.jwtSecret)
+          .then(async () => {
+
+            const user = await AccountModel.findOne({token});
+            if (user) {
+              if (user.is_blocked === 1 ) {
+                return res.json({
+                  code: '1005',
+                  message: 'expired token, go to login page' + err,
+                })
+              }
+            }
+
+            const post = await Post.findById(id);
+            if (!post) {
+              res.status(403).json({
+                code: 9992,
+                message: "post is not existed"
+              });
+              return;
+            } else {
+              if (post.banned === "1" || post.banned === "2") {
+                res.json({
+                  code: 9992,
+                  message: 'the post is banned!'
+                });
+
+                await post.deleteOne();
+                return;
+              } else {
+
+                post.update({banned}, {$set: {banned: '1'}});
+
+                return res.status(200).json({
+                  code: 1000,
+                  message: "the post has reported successfully!"
+                })
+              }
+            }   
+     
+          }).catch(err => {
+            return res.json({
+              code: '1005',
+              message: 'expired token, go to login page' + err,
+            });
+          });
+    }
+
+    
   } catch (err) {
     res.status(500).json({
       code: 1001,
@@ -260,47 +270,32 @@ const reportPost = async (req, res) => {
   }
 }
 
-const getPost = async (req, res) => {
-    try {
- 
-        const post = await Post.findById(req.params.id);
-        console.log(post);
+// const getPost = () => async (req,res) => {
+//   try {
+//     const { token, id } = req.body;
 
-        const bannedPost = (post.banned === 1) || (post.banned === 2);
+//     const trueAccessToken = await existAccessToken(token);
+//     if (trueAccessToken) {
+//       const post = await Post.findById(id);
+      
+//       if(post) {
+//         return res.status(200).json({
+//           code: "1000",
+//           message: "Get a post successful",
+//           data: {
+//             id: 
+//             described:
+            
+//           }
+//         })
+//       }
+//     }
 
-        res.status(200).json({
-          message: 'Post got successfully!',
-          code: 1000, 
-          data: post
-        });
-
-        // if (post === null) {
-        //   res.json({
-        //     message:"not show status",
-        //   })
-        // } else if (bannedPost) {
-        //   res.json({
-        //     code: "9992"
-        //   })
-        // } else if (is_blocked === 1) {
-        //   res.json({
-        //     message: "you have been blocked"
-        //   })
-        // } else if (post.can_comment === 1) {
-        //   res.json({
-        //     message: "not show comment"
-        //   })
-        // } else {
-        //   res.status(200).json({
-        //     message: 'Post got successfully!',
-        //     code: 1000, 
-        //     data: post
-        //   });
-        // }
-    } catch (err) {
-        res.status(500).json(err);
-    }
-}
+//   }
+//   catch (err) {
+//     console.log(err);
+//   }
+// }
 
 // const getListPost = async (req, res) => {
 //     let postArray = [];
@@ -323,81 +318,82 @@ const getPost = async (req, res) => {
 // }
 
 // Comments 
-const setComment = async (req, res) => {
+const set_comment = async (req, res) => {
   try {
-
     const { token, id, comment, index, count } = req.body;
-    const post = await Post.findById(req.params.id);
-    const isTrueToken = await verifiedAccessToken(token);
-
-    if(post.banned === 1 || post.banned === 2) {
-      res.json({
-        code: 9992,
-        message: 'the post is banned!'
-      })
-      
-      deletePost();
-    }
-        
-    if(isTrueToken && post) {
-      
-      const infoUser = await getInfoUser(token).then(data => data);
-      console.log(infoUser);
-
-      let newComment = new Comment({
-        token,
-        id,
-        comment,
-        index,
-        count,
-        // poster: {
-        //   id: "",
-        //   name: "",
-        //   avatar: "",
-        // },
+    if (!token && !id && comment && index && count) {
+      return res.json({
+        code: "1002",
+        message: "Parameter is not enough",
       });
-      
-      const savedComment = await newComment.save(); 
+    }
 
-      res.json({
-        code: 1000,
-        message: "set a comment successful!",
-        data: {
-          id: savedComment._id,
-          comment: savedComment.comment,
-          created: savedComment.created,
-          poster: savedComment.poster,
-          is_blocked: savedComment.is_blocked,
+    if ( 
+      typeof token !== "string" ||
+      typeof id !== "string" ||
+      typeof comment !== "string" ||
+      typeof index !== "string" ||
+      typeof count !== "string"
+    ) {
+      res.status(422).json({ message: "Invalid data"})
+      return;
+    } else {
+      await verifyJwtToken(token, process.env.jwtSecret)
+          .then(async () => {
+
+            const user = await AccountModel.findOne({token});
+            if (user) {
+              if (user.is_blocked === 1 ) {
+                return res.json({
+                  code: '1005',
+                  message: 'expired token, go to login page' + err,
+                })
+              }
+            }
+
+            const post = await Post.findById(id);
+            if (!post) {
+              res.status(403).json({
+                code: 9992,
+                message: "post is not existed"
+              });
+              return;
+            } else {
+              if (post.banned === "1" || post.banned === "2") {
+                res.json({
+                  code: 9992,
+                  message: 'the post is banned!'
+                });
+
+                await post.deleteOne();
+                return;
+              } else {
+
+                post.update({banned}, {$set: {banned: '1'}});
+
+                return res.status(200).json({
+                  code: 1000,
+                  message: "the post has reported successfully!"
+                })
+              }
+            }  
+          });
         }
-      })
-    }
-    else if (!isTrueToken) {
-      res.json({
-        message: "go back to login screen"
-      })
-    }
-    else if (post === null) {
-      res.json({
-        code: 9992,
-        message: "post is not existed"
-      })
-    }
 
   } catch (err) {
     res.status(500).json({
       code: 1001,
-      message: "your internet is disconnected!"
+      message: "your internet is disconnected!" + err,
     });
   }
 }
 
+
 module.exports = {
     addPost,
-    editPost,
+    // editPost,
     deletePost,
-    getPost,
+    // getPost,
     reportPost,
-    // getListPost,
-    handleUploadFile,
-    setComment,
+    // getListPost, b b
 }

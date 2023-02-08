@@ -1,6 +1,6 @@
 // common function
 import UserModel from '../models/users';
-import { verifyJwtToken } from '../utils';
+import { verifyJwtToken } from '../helper/utils';
 import AccountModel from '../models/accounts';
 
 /**
@@ -242,9 +242,127 @@ const get_list_blocks = async (req, res) => {
   }
 };
 
+
+/**
+ * @description set block 1 or unblock 0 for user
+ * @author dunglda
+ * @param {Object} req
+ * @param {Object} res
+ * @returns {JSON}
+ */
+const set_block = async (req, res) => {
+
+  const { token, user_id, type } = req.body;
+  if (!token || !user_id || !type) {
+    return res.json({
+      code: '1002',
+      message: 'Parameter is not enough',
+    });
+  } else {
+    await verifyJwtToken(token, process.env.jwtSecret)
+    .then(async () => {
+      await AccountModel.findOne({ token: token })
+        .then(async (response) => {
+          if (response) {
+            return res.json({
+              code: '1004',
+              message: 'Parameter value is invalid',
+            });
+          } else {
+            return res.status(200).json({
+              message: "ok",
+            })
+          }
+        }); 
+    })
+  }
+}
+
+  // try {
+
+  //   const trueAccessToken = existAccessToken(token);
+  //   const trueType = 0 || 1;
+
+  //   //Testcase 2: Wrong access token
+  //   if (trueAccessToken) {
+
+  //     const user = await UserModel.findOne(token);
+  //     if (user) {
+  //       if (user.is_blocked === 1) {
+  //         return res.status(403).json({
+  //           code: "1001",
+  //           message: "Wrong access token, go back login screen!",
+  //         })
+  //       }
+  //     }
+
+  //     if (user._id === user_id) {
+  //       return res.status(403).json({
+  //         message: "It's user_id of your own"
+  //       })
+  //     }
+
+  //     const blockUser = await UserModel.findById(user_id)
+  //     if (blockUser) {
+  //       //Testcase 7: User has is_blocked!
+  //       if (blockUser.is_blocked === 1) {
+  //         return res.json(403).json({
+  //           message: "User has is_blocked!"
+  //         })
+  //       }
+
+  //       //Testcase 8: Wrong TrueType!
+  //       if (trueType) {
+  //         if (trueType === 1 && blockUser.is_blocked === 1) {
+  //             return res.json(500).status({
+  //               message: "user has been blocked!"
+  //             })
+  //         } else if (trueType === 0 && blockUser.is_blocked === 0) {
+  //             return res.json(500).status({
+  //               message: "user has not block"
+  //             })
+  //         } else {
+  //             await UserModel.updateOne({user_id}, {
+  //                 is_blocked: trueType,
+  //               })
+                
+  //             return res.json(403).json({
+  //               code: "1000",
+  //               message: "set block successfully!"
+  //             })
+  //         }
+              
+  //       } else {
+  //         return res.json(403).json({
+  //           message: "Type must be 0 or 1"
+  //         })
+  //       }
+      
+  //     } else {
+  //       return res.json(403).json({
+  //         message: "Not found blockUser!"
+  //       })
+  //     }
+    
+    // } else {
+    //   res.status(403).json({
+    //     code: "1001",
+    //     message: "Wrong access token, go back login screen!",
+    //   })
+    // }
+
+  // } catch (err) {
+  //   res.status(500).json({
+  //     code: "9999",
+  //     message: "Server failed to post!" + err,
+  //   });
+  // }  
+
+
 module.exports = {
   getUserByAccountId,
   set_accept_friend,
   set_request_friend,
   get_list_blocks,
-};
+  set_block,
+}
