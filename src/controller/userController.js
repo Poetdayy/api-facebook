@@ -92,7 +92,6 @@ async function findSameFriends(currentUserId, destinationUserId) {
 }
 
 /**
- * @description need test
  * @author hieubt
  * @param {Object} req
  * @param {Object} res
@@ -109,52 +108,106 @@ const set_accept_friend = async (req, res) => {
     try {
       await verifyJwtToken(token, process.env.jwtSecret)
         .then(async () => {
-          await UserModel.findOne({ id: user_id })
-            .then(async (result) => {
-              if (!result) {
-                return res.json({
-                  code: '9995',
-                  message: 'User is not validated',
-                });
-              } else if (result?.is_blocked) {
-                return res.json({
-                  code: '9995',
-                  message: 'User is not validated',
-                });
-              } else {
-                if (is_accept.toString() === '1') {
-                  if (!result.friendIds.includes(is_accept.toString())) {
-                    result.friendIds.push(is_accept.toString());
-                  }
-                  await result.save();
+          await AccountModel.findOne({ token: token }).then(async (rs) => {
+            await UserModel.findOne({ id: rs._id.toString() })
+              .then(async (result) => {
+                if (!result) {
                   return res.json({
-                    code: '1000',
-                    message: 'OK',
+                    code: '9995',
+                    message: 'User is not validated',
                   });
-                } else if (is_accept.toString() === '0') {
-                  if (
-                    !_.isEmpty(result.suggested_friendIds) &&
-                    result.suggested_friendIds.includes(user_id)
-                  ) {
-                    let tmp = result.suggested_friendIds;
-                    result.suggested_friendIds = tmp.splice(
-                      result.suggested_friendIds.indexOf(user_id)
-                    );
-                    await result.save();
-                  }
+                } else if (result?.is_blocked) {
                   return res.json({
-                    code: '1000',
-                    message: 'OK',
+                    code: '9995',
+                    message: 'User is not validated',
                   });
+                } else {
+                  if (_.isEmpty(result.friendRequestIds)) {
+                    return res.json({
+                      code: '1004',
+                      message: 'Parameter value is invalid',
+                    });
+                  } else {
+                    let isExistedRequest = false;
+                    let requestList = result.friendRequestIds;
+                    requestList.forEach(async (request) => {
+                      if (request.id.toString() === user_id) {
+                        isExistedRequest = true;
+                        requestList.slice(requestList.indexOf(request), 1);
+                        console.log(requestList)
+                        result.suggested_friendIds = suggestedList;
+                        await result.save();
+                      }
+                    });
+                    if (is_accept.toString() === '1') {
+                      let friendList = result.friendIds;
+                      let isExistedFriend = false;
+                      friendList.forEach((friend) => {
+                        if (friend.id.toString() === user_id) {
+                          isExistedFriend = true;
+                          return res.json({
+                            code: '1004',
+                            message: 'Parameter value is invalid',
+                          });
+                        }
+                      });
+                      if (!isExistedFriend) {
+                        const d = new Date();
+                        d.setMinutes(d.getMinutes() + 60);
+                        let date = new Date(
+                          d.getTime() - d.getTimezoneOffset() * 60000
+                        );
+                        friendList.push({
+                          id: user_id,
+                          created: date.toISOString(),
+                        });
+                        result.friendIds = friendList;
+                        result.friendRequestIds = requestList;
+                        await result.save();
+                        return res.json({
+                          code: '1000',
+                          message: 'OK',
+                        });
+                      }
+                    } else if (is_accept.toString() === '0') {
+                      requestList.forEach((request) => {
+                        if (request.id.toString() === user_id) {
+                          requestList.slice(requestList.indexOf(request), 1);
+                        }
+                      });
+                      let suggestedList = result.suggested_friendIds;
+                      suggestedList.forEach((suggested) => {
+                        if (suggested.id.toString() === user_id) {
+                          suggestedList.slice(
+                            suggestedList.indexOf(suggested),
+                            1
+                          );
+                        }
+                      });
+                      result.friendRequestIds = requestList;
+                      result.suggested_friendIds = suggestedList;
+                      await result.save();
+                      return res.json({
+                        code: '1000',
+                        message: 'OK',
+                      });
+                    }
+                    if (!isExistedRequest) {
+                      return res.json({
+                        code: '1004',
+                        message: 'Parameter value is invalid',
+                      });
+                    }
+                  }
                 }
-              }
-            })
-            .catch((err) => {
-              return res.json({
-                code: '1005',
-                message: 'Unknown error',
+              })
+              .catch((err) => {
+                return res.json({
+                  code: '1005',
+                  message: 'Unknown error',
+                });
               });
-            });
+          });
         })
         .catch((err) => {
           return res.json({
@@ -206,7 +259,15 @@ const get_list_suggested_friend = async (req, res) => {
                       same_friends: same,
                     });
                     if (!suggested_id.includes(elem.id)) {
-                      suggested_id.push(elem.id);
+                      const d = new Date();
+                      d.setMinutes(d.getMinutes() + 60);
+                      let date = new Date(
+                        d.getTime() - d.getTimezoneOffset() * 60000
+                      );
+                      suggested_id.push({
+                        user_id: elem.id,
+                        created: date.toISOString(),
+                      });
                     }
                   }
                 });
@@ -242,7 +303,6 @@ const get_list_suggested_friend = async (req, res) => {
 };
 
 /**
- * @description need test
  * @author hieubt
  * @param {Object} req
  * @param {Object} res
@@ -260,15 +320,10 @@ const set_request_friend = async (req, res) => {
       .then(async () => {
         await AccountModel.findOne({ token: token })
           .then(async (response) => {
-            if (response) {
+            if (!response) {
               return res.json({
                 code: '1004',
                 message: 'Parameter value is invalid',
-              });
-            } else if (response.friendIds.length >= process.env.friendLimit) {
-              return res.json({
-                code: '9994',
-                message: 'No data or end of list data',
               });
             } else {
               await UserModel.findOne({ id: user_id })
@@ -283,15 +338,36 @@ const set_request_friend = async (req, res) => {
                       code: '9995',
                       message: 'User is not validated',
                     });
+                  } else if (
+                    data.friendIds?.length >= process.env.friendLimit
+                  ) {
+                    return res.json({
+                      code: '9994',
+                      message: 'No data or end of list data',
+                    });
                   } else {
-                    if (!data?.friendRequestIds?.includes(user_id)) {
-                      res.friendRequestIds.push(user_id);
+                    const d = new Date();
+                    d.setMinutes(d.getMinutes() + 60);
+                    let date = new Date(
+                      d.getTime() - d.getTimezoneOffset() * 60000
+                    );
+                    let checkRequested = 0;
+                    data?.friendRequestIds.forEach((request) => {
+                      if (request.id === user_id) {
+                        checkRequested += 1;
+                      }
+                    });
+                    if (checkRequested === 0) {
+                      data.friendRequestIds.push({
+                        id: user_id.toString(),
+                        created: date.toISOString(),
+                      });
                     }
                     await data.save();
                     return res.json({
                       code: '1000',
                       message: 'OK',
-                      data: res.friendRequestIds.length,
+                      data: data.friendRequestIds?.length,
                     });
                   }
                 })
@@ -299,6 +375,7 @@ const set_request_friend = async (req, res) => {
                   return res.json({
                     code: '1005',
                     message: 'Unknown error',
+                    err: err.message,
                   });
                 });
             }
@@ -307,6 +384,7 @@ const set_request_friend = async (req, res) => {
             return res.json({
               code: '1005',
               message: 'Unknown error',
+              err: err.message,
             });
           });
       })
@@ -314,6 +392,7 @@ const set_request_friend = async (req, res) => {
         return res.json({
           code: '1005',
           message: 'Unknown message',
+          err: err.message,
         });
       });
   }
@@ -416,9 +495,9 @@ const set_block = async (req, res) => {
   }
 };
 
-const get_requested_friend = async(req, res) => {
-  const {token, index, count} = req.body;
-}
+const get_requested_friend = async (req, res) => {
+  const { token, index, count } = req.body;
+};
 
 // try {
 
