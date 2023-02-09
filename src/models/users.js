@@ -8,7 +8,10 @@ mongoose.connect('mongodb://localhost/api-facebook', {
 
 const UserSchema = new Schema(
   {
-    id: String,
+    id: {
+      type: String,
+      ref: "accounts",
+    },
     username: String,
     phonenumber: String,
     created: Date,

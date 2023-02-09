@@ -6,10 +6,12 @@ import {
     getPost, 
     deletePost, 
     reportPost, 
-    setComment, 
+    setComment,
+    getComment,
+    like, 
 } from "../controller/postController";
 
-import { uploadImage, uploadVideo } from "../helper/utils";
+import { uploadImage, uploadVideo, setAllowUploadType } from "../helper/utils";
 
 // handle router
 let router = express.Router();
@@ -20,6 +22,10 @@ let initPostsRoutes = (app) => {
     router.delete('/delete_post', deletePost);
     
     router.post('/report_post', reportPost);
+
+    router.post('/like', like);
+
+    router.post('/get_post', getPost);
     
     // router.get('/get_post', getPost);
     
@@ -27,11 +33,13 @@ let initPostsRoutes = (app) => {
 
     // router.put('/:id', editPost);
 
-    // router.post('/:id/comment', setComment);
+    router.post('/set_comment', setComment);
+
+    router.post('/get_comment', getComment)
     
     // router.get('/:id/likePost', getLike);
 
-    return app.use('/post', router);
+    return app.use('/', router);
 }
 
 module.exports = initPostsRoutes;

@@ -22,6 +22,8 @@ const PostSchema = new Schema(
         can_comment: String,
         auto_accept: String,
         auto_block: String,
+        likes: [{type: String}],
+        comments: [], 
     },
     { timestamps: true }
 )

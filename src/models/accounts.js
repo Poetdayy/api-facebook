@@ -13,7 +13,10 @@ const AccountSchema = new Schema(
     token: String,
     expirationAccessTokenDate: Date,
     refreshToken: String,
-    id: String,
+    id: {
+      type: Schema.Types.ObjectId,
+      ref: 'users'
+    }
   },
   {
     collection: "accounts",
