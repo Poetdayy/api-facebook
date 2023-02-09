@@ -15,10 +15,10 @@ const UserSchema = new Schema(
     avatar: String,
     is_blocked: Boolean,
     online: Boolean,
-    friendIds: [{ type: String, created: Date }],
-    friendRequestIds: [{ type: String }],
+    friendIds: [{ id: String, created: Date }],
+    friendRequestIds: [{ id: String, created: Date }],
     blocked_list: [{ type: String }],
-    suggested_friendIds: [{ type: String, created: Date }],
+    suggested_friendIds: [{ id: String, created: Date }],
   },
   {
     collection: 'users',
