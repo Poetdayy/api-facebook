@@ -134,7 +134,7 @@ const set_accept_friend = async (req, res) => {
                       if (request.id.toString() === user_id) {
                         isExistedRequest = true;
                         requestList.slice(requestList.indexOf(request), 1);
-                        console.log(requestList)
+                        console.log(requestList);
                         result.suggested_friendIds = suggestedList;
                         await result.save();
                       }
@@ -478,20 +478,54 @@ const set_block = async (req, res) => {
       message: 'Parameter is not enough',
     });
   } else {
-    await verifyJwtToken(token, process.env.jwtSecret).then(async () => {
-      await AccountModel.findOne({ token: token }).then(async (response) => {
-        if (response) {
-          return res.json({
-            code: '1004',
-            message: 'Parameter value is invalid',
-          });
+    await verifyJwtToken(token, process.env.jwtSecret)
+      .then(async () => {
+        const account = await AccountModel.findOne({ token });
+        const user = await UserModel.findOne({ id: account.id });
+        if (user) {
+          if (user.is_blocked === 1) {
+            return res.json({
+              code: '1005',
+              message: 'user has been blocked' + err,
+            });
+          }
+        }
+
+        const trueType = 0 || 1;
+
+        if (trueType) {
+          if (trueType === 1 && user.is_blocked === 1) {
+            return res.json(500).status({
+              message: 'user has been blocked!',
+            });
+          } else if (trueType === 0 && user.is_blocked === 0) {
+            return res.json(500).status({
+              message: 'user has not block',
+            });
+          } else {
+            await UserModel.updateOne(
+              { user_id },
+              {
+                is_blocked: trueType,
+              }
+            );
+            return res.status(200).json({
+              code: '1000',
+              message: 'the user has been blocked successfully!',
+            });
+          }
         } else {
-          return res.status(200).json({
-            message: 'ok',
+          return res.json(403).json({
+            message: 'Type must be 0 or 1',
           });
         }
+      })
+      .catch((err) => {
+        return res.json({
+          code: '1005',
+          message: 'expired token, go to login page' + err,
+        });
       });
-    });
   }
 };
 
@@ -502,7 +536,6 @@ const get_requested_friend = async (req, res) => {
 // try {
 
 //   const trueAccessToken = existAccessToken(token);
-//   const trueType = 0 || 1;
 
 //   //Testcase 2: Wrong access token
 //   if (trueAccessToken) {
@@ -533,31 +566,7 @@ const get_requested_friend = async (req, res) => {
 //       }
 
 //       //Testcase 8: Wrong TrueType!
-//       if (trueType) {
-//         if (trueType === 1 && blockUser.is_blocked === 1) {
-//             return res.json(500).status({
-//               message: "user has been blocked!"
-//             })
-//         } else if (trueType === 0 && blockUser.is_blocked === 0) {
-//             return res.json(500).status({
-//               message: "user has not block"
-//             })
-//         } else {
-//             await UserModel.updateOne({user_id}, {
-//                 is_blocked: trueType,
-//               })
-
-//             return res.json(403).json({
-//               code: "1000",
-//               message: "set block successfully!"
-//             })
-//         }
-
-//       } else {
-//         return res.json(403).json({
-//           message: "Type must be 0 or 1"
-//         })
-//       }
+//
 
 //     } else {
 //       return res.json(403).json({
@@ -578,6 +587,10 @@ const get_requested_friend = async (req, res) => {
 //     message: "Server failed to post!" + err,
 //   });
 // }
+
+// const get_user_info = async (req, res) => {
+//   const { token } = req.body;
+// };
 
 module.exports = {
   getUserByAccountId,
