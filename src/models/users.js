@@ -13,7 +13,7 @@ const UserSchema = new Schema(
     phonenumber: String,
     created: Date,
     avatar: String,
-    is_blocked: Boolean,
+    is_blocked: String,
     online: Boolean,
     friendIds: [{ id: String, created: Date }],
     friendRequestIds: [{ id: String, created: Date }],

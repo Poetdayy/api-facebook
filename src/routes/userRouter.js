@@ -20,7 +20,7 @@ let initUserRoutes = (app) => {
 
   router.post('/get_list_suggested_friend', get_list_suggested_friend);
 
-  return app.use('/user', router);
+  return app.use('/', router);
 };
 
 module.exports = initUserRoutes;
