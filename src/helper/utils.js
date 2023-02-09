@@ -31,7 +31,7 @@ const storageImg = multer.diskStorage({
         cb(null, './public/images');
     },
     filename: function(req, file, cb) {
-        cb(null, file.originalname + '-' + Date.now())
+        cb(null, Date.now() + '-' + file.originalname)
     }
 });
 
@@ -40,7 +40,7 @@ const storageVideo = multer.diskStorage({
         cb(null, './public/videos');
     },
     filename: function(req, file, cb) {
-        cb(null, file.originalname + '-' + Date.now())
+        cb(null, Date.now() + file.originalname)
     }
 });
 
@@ -66,7 +66,7 @@ const fileFilterVideo = (req, file, cb) => {
 const uploadImage = multer({
     storage: storageImg,
     limits: {
-        fileSize: 1024*1024,
+        fileSize: 4096*4096,
     },
     fileFilter: fileFilterImg
 }).single("image");
@@ -76,9 +76,30 @@ const uploadVideo = multer({
     fileFilter: fileFilterVideo
 }).single("video");
 
+const storage = multer.diskStorage({
+  destination: function(req, file, cb) {
+    cb(null, './uploads/');
+  },
+  filename: function(req, file, cb) {
+    cb(null, file.fieldname + '-' + Date.now());
+  }
+});
+
+// change the allowed upload type
+const setAllowUploadType = (type) => {
+  if (type === 'image') {
+    uploadImage
+  } else if (type === "video") {
+    uploadVideo
+  } else {
+    throw new Error('Invalid upload type. Must be either image or video.');
+  }
+};
+
 
 module.exports = { 
     verifyJwtToken,
     uploadImage,
-    uploadVideo
+    uploadVideo,
+    setAllowUploadType
 };
